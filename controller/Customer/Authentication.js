@@ -3,6 +3,15 @@ const bcrypt = require("bcrypt");
 const { validateLoginInput, validateRegistrationInput } = require("./Helpers/Authentication");
 const jwt = require("jsonwebtoken")
 
+exports.test = async (req, res) => {
+    try {
+        res.status(200).json({ message: "Authenticatoin Success" })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ error: "Internal Server Error" })
+    }
+}
+
 exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body;

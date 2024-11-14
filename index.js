@@ -11,6 +11,7 @@ app.use(express.json());
 app.use(cors());
 
 app.use("/customer", customerRoutes);
+app.use("/company", companyRoutes);
 
 mongoose.connect(process.env.MONGO_URL)
     .then(() => console.log("DB Connection Successful"))
