@@ -11,15 +11,8 @@ router.post("/register", customerAuthenticationContoller.register);
 router.post("/login", customerAuthenticationContoller.login);
 
 
-router.get("/test", customerVerify, async (req, res) => {
-    try {
-        return res.status({ message: "Success" })
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            error: "Server Error"
-        })
-    }
-})
+router.get("/test", customerAuthenticationContoller.test)
+
+router.get("/test-verify", customerVerify, customerAuthenticationContoller.test)
 
 module.exports = router;
