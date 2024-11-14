@@ -1,4 +1,4 @@
-const router = require('express').Router();
+const router = require("express").Router();
 
 const customerAuthRoutes = require("../Customer/Authentication");
 const customerEnquiryRoutes = require("../Customer/Enquiry");
@@ -9,7 +9,6 @@ const customerProductRoutes = require("../Customer/Product")
 
 
 router.use("/auth", customerAuthRoutes);
-
 router.use("/enquiry", customerEnquiryRoutes);
 
 router.use("/opportunity", customerOpportunityRoutes);
