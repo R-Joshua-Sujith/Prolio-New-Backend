@@ -5,7 +5,8 @@
   "scripts": {
     "start": "nodemon index.js",
     "build": "npm i",
-    "test": "mocha"
+    "test": "mocha --recursive",
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": "",
@@ -22,6 +23,7 @@
     "nodemon": "^3.1.7"
   },
   "devDependencies": {
+    "eslint": "^9.14.0",
     "mocha": "^10.8.2"
   }
 }
