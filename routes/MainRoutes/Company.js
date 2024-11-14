@@ -5,7 +5,9 @@ const companyOpportunityRoutes = require("../Company/Opportunity");
 const companyProductRoutes = require("../Company/Product");
 
 router.use("/enquiry", companyEnquiryRoutes);
+
 router.use("/opportunity", companyOpportunityRoutes);
+
 router.use("/product", companyProductRoutes);
 
 
