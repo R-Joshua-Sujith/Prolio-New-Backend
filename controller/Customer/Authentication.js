@@ -94,7 +94,6 @@ exports.login = async (req, res) => {
                 id: customer._id,
             },
             process.env.JWT_SECRET_KEY,
-            { expiresIn: '1d' }
         );
 
         // // Generate refresh token
