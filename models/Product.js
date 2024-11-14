@@ -8,7 +8,8 @@ const productSchema = new Schema({
         id: { type: String },
         slug: { type: String },
         name: { type: String },
-        price: { type: Number }
+        price: { type: Number },
+        description: { type: Number }
     },
     images: [{
         url: { type: String },

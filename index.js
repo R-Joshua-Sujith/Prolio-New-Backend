@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const { getServerStatusMessage } = require("./utils/serverStatus");
 const customerRoutes = require("./routes/MainRoutes/Customer");
+const companyRoutes = require("./routes/MainRoutes/Company")
 
 dotenv.config();
 const app = express();
@@ -11,6 +12,7 @@ app.use(express.json());
 app.use(cors());
 
 app.use("/customer", customerRoutes);
+app.use("/company", companyRoutes);
 
 app.get("/", (req, res) => {
   res.send(getServerStatusMessage());

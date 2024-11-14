@@ -1,10 +1,16 @@
 const Customer = require("../../models/Customer");
 const bcrypt = require("bcrypt");
-const {
-  validateLoginInput,
-  validateRegistrationInput,
-} = require("./Helpers/Authentication");
-const jwt = require("jsonwebtoken");
+const { validateLoginInput, validateRegistrationInput } = require("./Helpers/Authentication");
+const jwt = require("jsonwebtoken")
+
+exports.test = async (req, res) => {
+    try {
+        res.status(200).json({ message: "Authenticatoin Success" })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ error: "Internal Server Error" })
+    }
+}
 
 exports.register = async (req, res) => {
   try {
@@ -48,33 +54,39 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const { errors, isValid } = validateLoginInput(email, password);
-    if (!isValid) {
-      return res.status(400).json({ success: false, errors });
-    }
-    const customer = await Customer.findOne({ email });
-    if (!customer) {
-      return res.status(401).json({
-        success: false,
-        error: "User with this Email Dosen't Exist",
-      });
-    }
-    const isPasswordValid = bcrypt.compare(password, customer.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid Password",
-      });
-    }
-    const accessToken = jwt.sign(
-      {
-        id: customer._id,
-      },
-      process.env.JWT_SECRET_KEY,
-      { expiresIn: "1d" }
-    );
+    try {
+        const { email, password } = req.body;
+
+        const { errors, isValid } = validateLoginInput(email, password);
+
+        if (!isValid) {
+            return res.status(400).json({ success: false, errors });
+        }
+
+        const customer = await Customer.findOne({ email });
+
+        if (!customer) {
+            return res.status(401).json({
+                success: false,
+                error: "User with this Email Dosen't Exist"
+            });
+        }
+
+        const isPasswordValid = bcrypt.compare(password, customer.password);
+
+        if (!isPasswordValid) {
+            return res.status(401).json({
+                success: false,
+                error: "Invalid Password",
+            });
+        }
+
+        const accessToken = jwt.sign(
+            {
+                id: customer._id,
+            },
+            process.env.JWT_SECRET_KEY,
+        );
 
     // // Generate refresh token
     // const refreshToken = jwt.sign(
