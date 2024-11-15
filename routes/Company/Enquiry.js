@@ -9,12 +9,12 @@ router.get("/test-verify", companyVerify, companyEnquiryController.test);
 // Company routes
 router.post(
   "/reply/:enquiryId",
-  //   companyVerify,
+  companyVerify,
   companyEnquiryController.replyToEnquiry
 );
 router.get(
   "/messages/:enquiryId",
-  //   companyVerify,
+  companyVerify,
   companyEnquiryController.getEnquiryMessages
 );
 
