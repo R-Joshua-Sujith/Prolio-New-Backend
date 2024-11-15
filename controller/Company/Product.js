@@ -29,7 +29,6 @@ const createProduct = async (req, res) => {
       price,
       description,
       ownerId,
-      status,
       colors,
       attributes,
       category,
