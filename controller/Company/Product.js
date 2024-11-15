@@ -4,7 +4,7 @@ const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 
 /**
- *  Function to check if the API is working
+ *  Function to check the API is working
  */
 const test = async (req, res) => {
   try {
