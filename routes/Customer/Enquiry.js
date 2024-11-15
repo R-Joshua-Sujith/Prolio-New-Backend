@@ -9,12 +9,12 @@ router.get("/test-verify", customerVerify, customerEnquiryController.test);
 // Customer routes
 router.post(
   "/initiateEnquiry",
-  //   customerVerify,
+  customerVerify,
   customerEnquiryController.initiateEnquiry
 );
 router.get(
   "/messages/:enquiryId",
-  //   customerVerify,
+  customerVerify,
   customerEnquiryController.getEnquiryMessages
 );
 

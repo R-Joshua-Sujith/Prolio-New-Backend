@@ -9,8 +9,16 @@ const apiRoutes = {
 
   // Company routes
   company: {
+    auth: "/company/auth",
     enquiry: "/company/enquiry",
     product: "/company/product",
+  },
+
+  // Admin routes
+  admin: {
+    auth: "/admin/auth",
+    enquiry: "/admin/enquiry",
+    product: "/admin/product",
   },
 };
 
