@@ -26,7 +26,8 @@ const enquiryController = {
   initiateEnquiry: async (req, res) => {
     try {
       const { productId, message } = req.body;
-      const customerId = "6735e1de6fc1600f43aea05d";
+      const customerId = req.user.id;
+      //   const customerId = "6735e1de6fc1600f43aea05d";
       const product = await ProductModel.findById(productId);
 
       if (!product) {
@@ -105,7 +106,8 @@ const enquiryController = {
         return apiResponse.error(res, 404, "Enquiry not found");
       }
 
-      const userId = "6735e1de6fc1600f43aea05d";
+      const userId = req.user.id;
+      //   const userId = "6735e1de6fc1600f43aea05d";
       const customerId = enquiry.customerId.toString();
       const ownerId = enquiry.ownerId.toString();
 

@@ -27,7 +27,8 @@ const enquiryController = {
     try {
       const { enquiryId } = req.params;
       const { message } = req.body;
-      const companyUserId = "6735e1fe6fc1600f43aea060";
+      const companyUserId = req.user.id;
+      //   const companyUserId = "6735e1fe6fc1600f43aea060";
       const enquiry = await EnquiryModel.findById(enquiryId);
       if (!enquiry) {
         return sendResponse(res, 404, false, "Enquiry not found");
@@ -64,7 +65,7 @@ const enquiryController = {
   },
 
   /**
-   * Get paginated messages for an enquiry
+   * Get messages for an enquiry
    * @route GET /company/enquiry/messages/:enquiryId
    * @param {string} enquiryId - ID of the enquiry
    * @param {number} limit - Number of messages per page (default: 10)
@@ -82,8 +83,8 @@ const enquiryController = {
       if (!enquiry) {
         return apiResponse.error(res, 404, "Enquiry not found");
       }
-
-      const userId = "6735e1de6fc1600f43aea05d";
+      const userId = req.user.id;
+      //   const userId = "6735e1de6fc1600f43aea05d";
       const customerId = enquiry.customerId.toString();
       const ownerId = enquiry.ownerId.toString();
 
