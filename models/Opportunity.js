@@ -41,13 +41,12 @@ const opportunitySchema = new Schema(
       ref: "Product",
       required: true,
     },
-    opportunity_role: [
-      {
-        type: String,
-        required: true,
-        trim: true,
-      },
-    ],
+    opportunity_role: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     address: {
       type: String,
       required: true,
@@ -62,22 +61,6 @@ const opportunitySchema = new Schema(
       type: String,
       trim: true,
     },
-    documents: [
-      {
-        url: {
-          type: String,
-          required: true,
-        },
-        publicId: {
-          type: String,
-          required: true,
-        },
-        uploadedAt: {
-          type: Date,
-          default: Date.now,
-        },
-      },
-    ],
     status: {
       type: String,
       enum: ["Processing", "Approved", "Rejected"],
@@ -99,3 +82,5 @@ const opportunitySchema = new Schema(
 opportunitySchema.index({ customerId: 1, status: 1 });
 opportunitySchema.index({ ownerId: 1, status: 1 });
 opportunitySchema.index({ productId: 1 });
+
+module.exports = mongoose.model("Opportunity", opportunitySchema);
