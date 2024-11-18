@@ -1,5 +1,6 @@
 const EnquiryModel = require("../../models/Enquiry");
 const CustomerModel = require("../../models/Customer");
+const CompanyUserModel = require("../../models/CompanyUser");
 const ProductModel = require("../../models/Product");
 const { apiResponse } = require("../../utils/responseHandler");
 
@@ -23,62 +24,65 @@ const enquiryController = {
    * @param {string} message - The initial message from the customer.
    * @returns {Object} - Returns the created or updated enquiry object response.
    */
+
   initiateEnquiry: async (req, res) => {
     try {
       const { productId, message } = req.body;
-      const customerId = req.user.id;
-      //   const customerId = "6735e1de6fc1600f43aea05d";
-      const product = await ProductModel.findById(productId);
+      const userId = req.user.id;
 
+      const [isCustomer, isCompanyUser] = await Promise.all([
+        CustomerModel.findById(userId),
+        CompanyUserModel.findById(userId),
+      ]);
+
+      const userModel = isCustomer
+        ? "Customer"
+        : isCompanyUser
+        ? "CompanyUser"
+        : null;
+
+      if (!userModel) {
+        return apiResponse.error(res, 404, "User not found in any model");
+      }
+      const product = await ProductModel.findById(productId);
       if (!product) {
         return apiResponse.error(res, 404, "Product not found");
       }
-
-      const existingEnquiry = await EnquiryModel.findOne({
-        customerId,
+      let enquiry = await EnquiryModel.findOne({
+        customerId: userId,
         productId,
       });
 
-      if (existingEnquiry) {
-        existingEnquiry.messages.push({
-          content: message,
-          role: "customer",
-          id: customerId,
-          userModel: "Customer",
+      const newMessage = {
+        content: message,
+        role: "customer",
+        id: userId,
+        userModel,
+      };
+
+      if (enquiry) {
+        enquiry.messages.push(newMessage);
+      } else {
+        enquiry = new EnquiryModel({
+          customerId: userId,
+          ownerId: product.ownerId,
+          productId,
+          messages: [newMessage],
         });
-
-        await existingEnquiry.save();
-
-        return apiResponse.success(
-          res,
-          200,
-          "Reply added to existing enquiry",
-          existingEnquiry
-        );
       }
 
-      // If no existing enquiry, create a new enquiry
-      const newEnquiry = new EnquiryModel({
-        customerId,
-        ownerId: product.ownerId,
-        productId,
-        messages: [
-          {
-            content: message,
-            role: "customer",
-            id: customerId,
-            userModel: "Customer",
-          },
-        ],
-      });
+      await enquiry.save();
 
-      await newEnquiry.save();
+      const responseMessage =
+        enquiry.messages.length > 1
+          ? "Reply added to existing enquiry"
+          : "Enquiry initiated successfully";
 
       return apiResponse.success(
         res,
-        201,
-        "Enquiry initiated successfully",
-        newEnquiry
+        enquiry.messages.length > 1 ? 200 : 201,
+        responseMessage,
+        enquiry
       );
     } catch (error) {
       console.error("Error initiating enquiry:", error);
@@ -100,14 +104,12 @@ const enquiryController = {
       const limit = parseInt(req.query.limit, 10) || 10;
       const skip = (page - 1) * limit;
 
-      // Fetch the enquiry by ID
       const enquiry = await EnquiryModel.findById(enquiryId);
       if (!enquiry) {
         return apiResponse.error(res, 404, "Enquiry not found");
       }
 
       const userId = req.user.id;
-      //   const userId = "6735e1de6fc1600f43aea05d";
       const customerId = enquiry.customerId.toString();
       const ownerId = enquiry.ownerId.toString();
 
