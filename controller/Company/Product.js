@@ -23,17 +23,12 @@ const test = async (req, res) => {
 const createProduct = async (req, res) => {
   try {
     const {
-      id,
-      slug,
-      name,
-      price,
-      description,
-      ownerId,
-      colors,
-      attributes,
-      category,
-      dynamicSteps,
-    } = req.body;
+      formData
+    } = JSON.parse(req.body.data);
+
+    console.log("hi", req.body)
+
+    let ownerId = "6735e1fe6fc1600f43aea060";
 
     const uploadedImages = await Promise.all(
       (req.files || []).map(async (file) => {
@@ -48,14 +43,17 @@ const createProduct = async (req, res) => {
     );
 
     const newProduct = await ProductModel.create({
-      basicDetails: { id, slug, name, price, description },
+      basicDetails: formData.basicDetails,
       ownerId,
-      status,
       images: uploadedImages,
-      colors,
-      attributes,
-      category,
-      dynamicSteps,
+      colors: formData.colors,
+      attributes: formData.attributes,
+      category: formData.category,
+      dynamicSteps: formData.dynamicSteps.steps,
+      category: {
+        categoryId: formData.category.categoryId
+      },
+      opportunities: formData.opportunities
     });
     sendResponse(res, 201, true, "Product created successfully", newProduct);
   } catch (error) {
