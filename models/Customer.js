@@ -26,12 +26,38 @@ const customerSchema = new Schema(
     isCompany: {
       applied: { type: Boolean, default: false },
       verified: { type: Boolean, default: false },
+      rejected: { type: Boolean, default: false }
     },
     isInfluencer: {
       applied: { type: Boolean, default: false },
       verified: { type: Boolean, default: false },
     },
-    companyDetails: { type: mongoose.Schema.Types.Mixed },
+    companyDetails: {
+      companyInfo: {
+        companyName: { type: String },
+        ownerName: { type: String },
+        yearEstablishment: { type: Number },
+        gstNo: { type: String },
+        businessType: { type: String },
+        totalEmployees: { type: Number }
+      },
+      contactInfo: {
+        address: { type: String },
+        city: { type: String },
+        state: { type: String },
+        pincode: { type: String },
+        email: { type: String },
+        phone: { type: String }
+      },
+      companyLogo: {
+        url: { type: String },
+        publicId: { type: String }
+      },
+      documents: [{
+        url: { type: String },
+        publicId: { type: String }
+      }]
+    },
     influencerDetails: { type: mongoose.Schema.Types.Mixed },
     wishList: [
       {
