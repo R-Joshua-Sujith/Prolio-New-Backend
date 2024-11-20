@@ -76,7 +76,6 @@ exports.login = async (req, res) => {
 exports.refreshToken = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
-
     if (!refreshToken) {
       return sendResponse(res, 401, false, "Refresh token not found");
     }
@@ -128,7 +127,7 @@ exports.logout = async (req, res) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
     });
-
+    
     return sendResponse(res, 200, true, "Logged out successfully");
   } catch (error) {
     console.error("Logout error:", error);

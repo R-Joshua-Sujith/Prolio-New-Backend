@@ -1,16 +1,20 @@
 const Customer = require("../../models/Customer");
 const bcrypt = require("bcrypt");
-const { validateLoginInput, validateRegistrationInput } = require("./Helpers/Authentication");
-const jwt = require("jsonwebtoken")
+const {
+  validateLoginInput,
+  validateRegistrationInput,
+} = require("./Helpers/Authentication");
+
+const jwt = require("jsonwebtoken");
 
 exports.test = async (req, res) => {
-    try {
-        res.status(200).json({ message: "Authenticatoin Success" })
-    } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: "Internal Server Error" })
-    }
-}
+  try {
+    res.status(200).json({ message: "Authenticatoin Success" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
 
 exports.register = async (req, res) => {
   try {
@@ -54,58 +58,40 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-        const { errors, isValid } = validateLoginInput(email, password);
+    const { errors, isValid } = validateLoginInput(email, password);
 
-        if (!isValid) {
-            return res.status(400).json({ success: false, errors });
-        }
+    if (!isValid) {
+      return res.status(400).json({ success: false, errors });
+    }
 
-        const customer = await Customer.findOne({ email });
+    const customer = await Customer.findOne({ email });
 
-        if (!customer) {
-            return res.status(401).json({
-                success: false,
-                error: "User with this Email Dosen't Exist"
-            });
-        }
+    if (!customer) {
+      return res.status(401).json({
+        success: false,
+        error: "User with this Email Dosen't Exist",
+      });
+    }
 
-        const isPasswordValid = bcrypt.compare(password, customer.password);
+    const isPasswordValid = bcrypt.compare(password, customer.password);
 
-        if (!isPasswordValid) {
-            return res.status(401).json({
-                success: false,
-                error: "Invalid Password",
-            });
-        }
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid Password",
+      });
+    }
 
-        const accessToken = jwt.sign(
-            {
-                id: customer._id,
-            },
-            process.env.JWT_SECRET_KEY,
-        );
-
-    // // Generate refresh token
-    // const refreshToken = jwt.sign(
-    //     { id: customer._id },
-    //     process.env.REFRESH_TOKEN_SECRET,
-    //     { expiresIn: '2m' }
-    // );
-
-    // // Save refresh token to database
-    // customer.refreshToken = refreshToken;
+    const accessToken = jwt.sign(
+      {
+        id: customer._id,
+      },
+      process.env.JWT_SECRET_KEY
+    );
     await customer.save();
-
-    // // Set refresh token in HTTP-only cookie
-    // res.cookie('refreshToken', refreshToken, {
-    //     httpOnly: true,
-    //     secure: process.env.NODE_ENV === 'production',
-    //     sameSite: 'strict',
-    //     maxAge: 2 * 60 // 7 days
-    // });
 
     return res.status(200).json({
       success: true,
@@ -151,34 +137,29 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
-// Logout endpoint to clear refresh token
+// Logout endpoint
+const blacklist = new Set();
 exports.logout = async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
+    const cookieToken = req.cookies.accessToken;
+    const headerToken = req.headers.authorization?.split(" ")[1];
 
-    if (!refreshToken) {
-      return res.status(401).json({ error: "Refresh token not found" });
+    const accessToken = cookieToken || headerToken;
+
+    if (!accessToken) {
+      return res.status(401).json({ error: "Access token not found" });
     }
+    blacklist.add(accessToken);
 
-    // Verify refresh token
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    // Clear the cookie
+    // res.clearCookie("accessToken", {
+    //   httpOnly: true,
+    //   secure: process.env.NODE_ENV === "production",
+    //   sameSite: "strict",
+    //   path: "/",
+    // });
 
-    const customer = await Customer.findById(decoded.id);
-    if (customer) {
-      customer.refreshToken = null;
-      await customer.save();
-    } else {
-      return res.status(400).json({ error: "Customer Not Found" });
-    }
-
-    // Clear refresh token cookie
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
-
-    res.json({ message: "Logged out successfully" });
+    return res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
     console.error("Logout error:", error);
     res.status(500).json({ error: "Internal server error" });
