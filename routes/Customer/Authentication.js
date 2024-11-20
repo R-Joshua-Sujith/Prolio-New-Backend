@@ -12,10 +12,6 @@ router.get(
 
 router.post("/register", customerAuthenticationContoller.register);
 router.post("/login", customerAuthenticationContoller.login);
-router.delete(
-  "/logout",
-  customerVerify,
-  customerAuthenticationContoller.logout
-);
+router.delete("/logout", customerAuthenticationContoller.logout);
 
 module.exports = router;
