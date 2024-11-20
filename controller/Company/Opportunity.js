@@ -288,6 +288,7 @@ const updateOpportunityStatus = async (req, res) => {
   }
 };
 
+// Get oppurtunity Count for the Owner (Analytics)
 const getOpportunityCountsByOwner = async (req, res) => {
   try {
     const ownerId = "6735e1fe6fc1600f43aea060"; // Replace with actual ownerId

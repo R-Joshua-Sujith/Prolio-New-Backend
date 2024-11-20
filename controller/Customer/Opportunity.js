@@ -2,14 +2,72 @@ const OpportunityModel = require("../../models/Opportunity");
 const CustomerModel = require("../../models/Customer");
 const Product = require("../../models/Product");
 const mongoose = require("mongoose");
+const { uploadToS3 } = require("../../utils/s3FileUploader");
 
 // CREATE OPPURTUNITY
+// const submitOpportunity = async (req, res) => {
+//   try {
+//     const {
+//       productId,
+//       opportunity_role,
+//       name,
+//       address,
+//       yearsOfExp,
+//       memo,
+//       productsDealtWith,
+//     } = req.body;
+
+//     // const customerId = req.user._id;
+//     const customerId = req.user.id;
+
+//     // Check if product exists
+//     const product = await Product.findById(productId);
+//     if (!product) {
+//       return res.status(404).json({ error: "Product not found" });
+//     }
+
+//     // Create new opportunity
+//     const newOpportunity = new OpportunityModel({
+//       customerId,
+//       ownerId: product.ownerId,
+//       name,
+//       productId,
+//       opportunity_role,
+//       address,
+//       yearsOfExp,
+//       memo,
+//       productsDealtWith,
+//       status: "Processing",
+//     });
+
+//     await newOpportunity.save();
+
+//     res.status(201).json({
+//       message: "Opportunity created successfully",
+//       opportunity: newOpportunity,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// };
+
 const submitOpportunity = async (req, res) => {
   try {
-    const { productId, opportunity_role, address, yearsOfExp, memo } = req.body;
+    const {
+      productId,
+      opportunity_role,
+      name,
+      address,
+      yearsOfExp,
+      memo,
 
-    // const customerId = req.user._id;
-    const customerId = "6735e1de6fc1600f43aea05d";
+      productsDealtWith,
+    } = req.body;
+
+    const customerId = req.user.id;
+    console.log("Product ID received:", req.body.productId);
+    console.log("Body", req.body);
 
     // Check if product exists
     const product = await Product.findById(productId);
@@ -17,16 +75,44 @@ const submitOpportunity = async (req, res) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
+    // Handle file uploads if any
+
+    console.log(req.files);
+    console.log(req.body);
+
+    let uploadedFiles = [];
+    if (req.files && req.files.length > 0) {
+      // Use Set to remove duplicate files
+      const uniqueFiles = Array.from(
+        new Set(req.files.map((f) => f.originalname))
+      ).map((name) => req.files.find((f) => f.originalname === name));
+
+      uploadedFiles = await Promise.all(
+        uniqueFiles.map(async (file) => {
+          const uploadResult = await uploadToS3(
+            file.buffer,
+            file.originalname,
+            file.mimetype,
+            "opportunities"
+          );
+          return uploadResult.url;
+        })
+      );
+    }
+
     // Create new opportunity
     const newOpportunity = new OpportunityModel({
       customerId,
       ownerId: product.ownerId,
+      name,
       productId,
       opportunity_role,
       address,
       yearsOfExp,
       memo,
+      productsDealtWith,
       status: "Processing",
+      documents: uploadedFiles, // Array of S3 URLs
     });
 
     await newOpportunity.save();
