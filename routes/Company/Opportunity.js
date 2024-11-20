@@ -3,10 +3,32 @@ const router = express.Router();
 
 const companyOpportunityController = require("../../controller/Company/Opportunity");
 
-const { companyVerify } = require("../../controller/Company/Middleware/auth")
+const { companyVerify } = require("../../controller/Company/Middleware/auth");
 
-router.get("/test", companyOpportunityController.test);
+// View Opportunity for specific Producct
+router.get(
+  "/view-product-opportunities",
+  companyVerify,
+  companyOpportunityController.viewProductOpportunities
+);
 
-router.get("/test-verify", companyVerify, companyOpportunityController.test);
+// View SingleOppurtunity
+router.get(
+  "/view-single-opportunity",
+  companyVerify,
+  companyOpportunityController.viewSingleOpportunityOwner
+);
+
+router.get(
+  "/Update-status-opportunity",
+  companyVerify,
+  companyOpportunityController.updateOpportunityStatus
+);
+
+router.get(
+  "/getOpportunityCountsByOwner",
+  companyVerify,
+  companyOpportunityController.getOpportunityCountsByOwner
+);
 
 module.exports = router;
