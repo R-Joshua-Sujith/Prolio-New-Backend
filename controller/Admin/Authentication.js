@@ -1,8 +1,10 @@
-const adminModel = require("../../models/Admin");
+const AdminModel = require("../../models/Admin");
 const bcrypt = require("bcrypt");
 const { validateLoginInput } = require("./Helpers/Authentication");
 const jwt = require("jsonwebtoken");
 const { sendResponse } = require("../../utils/responseHandler");
+
+const secretKey = process.env.JWT_SECRET_KEY
 
 // Test Route
 exports.test = async (req, res) => {
@@ -14,123 +16,144 @@ exports.test = async (req, res) => {
   }
 };
 
-// Registration Route
-exports.register = async (req, res) => {
+exports.create = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, password, email } = req.body;
 
-    const existingEmail = await adminModel.findOne({ email });
-    if (existingEmail) {
-      return sendResponse(res, 400, false, "Email Already Registered");
+    // Validate required fields
+    if (!username || !password || !email) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    const existingUser = await AdminModel.findOne({
+      $or: [{ username }, { email }],
+    });
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ error: "Username or email already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newAdmin = new adminModel({
+    const adminUser = new AdminModel({
       username,
-      email,
       password: hashedPassword,
-      status: "active",
+      email,
     });
 
-    await newAdmin.save();
-    return sendResponse(res, 201, true, "Registration successful");
-  } catch (error) {
-    console.error("Registration error:", error);
-    return sendResponse(res, 500, false, "Registration error", error);
-  }
-};
+    await adminUser.save();
 
-// Login Route
+    res.status(201).json(adminUser);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error creating admin user" });
+  }
+}
+
 exports.login = async (req, res) => {
+  const { email, password } = req.body;
+  const userAgent = req.headers["user-agent"];
+  const currentTime = new Date().toISOString();
+
+  const deviceID = userAgent + " " + currentTime;
   try {
-    const { email, password } = req.body;
-    const { errors, isValid } = validateLoginInput(email, password);
-    if (!isValid) {
-      return sendResponse(res, 400, false, "Validation Error", errors);
+    const user = await AdminModel.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ error: "User Not Found" });
     }
 
-    const admin = await adminModel.findOne({ email });
-    if (!admin) {
-      return sendResponse(res, 401, false, "Admin doesn't exist");
-    }
-    const isPasswordValid = await bcrypt.compare(password, admin.password);
-    if (!isPasswordValid) {
-      return sendResponse(res, 401, false, "Invalid password");
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: "Invalid Password" });
     }
 
-    const accessToken = jwt.sign(
-      { id: admin._id },
-      process.env.JWT_SECRET_KEY,
-      { expiresIn: "15m" }
-    );
+    user.loggedInDevice.push({
+      deviceID,
+      date: currentTime,
+    });
+    await user.save();
 
-    return sendResponse(res, 200, true, "Login successful", { accessToken });
-  } catch (error) {
-    console.error("Login error:", error);
-    return sendResponse(res, 500, false, "Login error", error);
-  }
-};
+    const payload = {
+      loggedInDevice: deviceID,
+      id: user._id,
+    };
 
-// Refresh Token Route
-exports.refreshToken = async (req, res) => {
-  try {
-    const refreshToken = req.cookies.refreshToken;
-    if (!refreshToken) {
-      return sendResponse(res, 401, false, "Refresh token not found");
-    }
-
-    // Verify refresh token
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-    const admin = await adminModel.findById(decoded.id);
-
-    if (!admin || admin.refreshToken !== refreshToken) {
-      return sendResponse(res, 403, false, "Invalid refresh token");
-    }
-
-    // Generate new access token
-    const accessToken = jwt.sign(
-      { id: admin._id },
-      process.env.JWT_SECRET_KEY,
-      { expiresIn: "15m" }
-    );
-
-    return sendResponse(res, 200, true, "Access token refreshed", {
-      accessToken,
+    const token = jwt.sign(payload, secretKey);
+    res.status(200).json({
+      token,
     });
   } catch (error) {
-    console.error("Refresh token error:", error);
-    return sendResponse(res, 403, false, "Invalid refresh token", error);
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
-};
+}
 
-// Logout Route
+
+exports.getProfile = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const user = await AdminModel.findOne({ _id: id }).select("email username loggedInDevice ")
+    if (!user) {
+      return res.status(404).json({ error: "User Not Found" });
+    }
+    res.status(200).json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
+
+exports.removeLoggedInDevice = async (req, res) => {
+  const { deviceId } = req.params;
+  const { id } = req.user;
+  try {
+    const user = await AdminModel.findOne({
+      _id: id,
+      "loggedInDevice._id": deviceId,
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "User not found with the specified device" });
+    }
+    user.loggedInDevice.pull({ _id: deviceId });
+
+    await user.save();
+
+    res.json({ message: "Session Removed Successfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Server Error" });
+  }
+}
+
 exports.logout = async (req, res) => {
+  console.log("hi")
+  const { id, loggedInDevice } = req.user;
   try {
-    const refreshToken = req.cookies.refreshToken;
-    if (!refreshToken) {
-      return sendResponse(res, 401, false, "Refresh token not found");
-    }
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-    const admin = await adminModel.findById(decoded.id);
-
-    if (admin) {
-      admin.refreshToken = null;
-      await admin.save();
-    } else {
-      return sendResponse(res, 400, false, "Admin not found");
-    }
-
-    // Clear refresh token cookie
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+    const user = await AdminModel.findOne({
+      _id: id.toString(),
+      "loggedInDevice.deviceID": loggedInDevice,
     });
-    
-    return sendResponse(res, 200, true, "Logged out successfully");
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "User not found with the specified device" });
+    }
+    user.loggedInDevice.pull({ deviceID: loggedInDevice });
+
+    await user.save();
+
+    res.json({ message: "Session Removed Successfully" });
   } catch (error) {
-    console.error("Logout error:", error);
-    return sendResponse(res, 500, false, "Logout error", error);
+    console.log(error);
+    res.status(500).json({ error: "Server Error" });
   }
-};
+}
+
+

@@ -7,7 +7,7 @@ const cookieParser = require("cookie-parser");
 const { getServerStatusMessage } = require("./utils/serverStatus");
 const customerRoutes = require("./routes/MainRoutes/Customer");
 const companyRoutes = require("./routes/MainRoutes/Company");
-const adminRoutes = require("./routes/MainRoutes/admin");
+const adminRoutes = require("./routes/MainRoutes/Admin");
 
 dotenv.config();
 const app = express();
