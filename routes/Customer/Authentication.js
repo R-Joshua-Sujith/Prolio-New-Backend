@@ -1,7 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const customerAuthenticationContoller = require("../../controller/Customer/Authentication");
-const { customerVerify } = require("../../controller/Customer/Middleware/auth");
+const {
+  customerVerify,
+  looseVerify,
+} = require("../../controller/Customer/Middleware/auth");
 
 router.get("/test", customerAuthenticationContoller.test);
 router.get(
@@ -12,6 +15,15 @@ router.get(
 
 router.post("/register", customerAuthenticationContoller.register);
 router.post("/login", customerAuthenticationContoller.login);
+router.get(
+  "/check-verification",
+  looseVerify,
+  customerAuthenticationContoller.checkVerificationStatus
+);
+
+// Route to send OTP
+router.post("/send-otp", customerAuthenticationContoller.sendOTP);
+router.post("/verify-otp", customerAuthenticationContoller.verifyOTP);
 router.delete("/logout", customerAuthenticationContoller.logout);
 
 module.exports = router;

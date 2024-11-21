@@ -1,11 +1,17 @@
+const axios = require("axios");
 const Customer = require("../../models/Customer");
 const bcrypt = require("bcrypt");
 const {
   validateLoginInput,
   validateRegistrationInput,
 } = require("./Helpers/Authentication");
-
 const jwt = require("jsonwebtoken");
+const { sendResponse } = require("../../utils/responseHandler");
+const dotenv = require("dotenv");
+dotenv.config();
+
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_URL = process.env.BREVO_API_URL;
 
 exports.test = async (req, res) => {
   try {
@@ -107,6 +113,37 @@ exports.login = async (req, res) => {
   }
 };
 
+exports.checkVerificationStatus = async (req, res) => {
+  try {
+    const customerId = req.user?.id;
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized. User ID not found.",
+      });
+    }
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      console.log("Customer not found for ID:", customerId);
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found.",
+      });
+    }
+    console.log("Customer verification status:", customer.status);
+    return res.status(200).json({
+      success: true,
+      status: customer.status,
+    });
+  } catch (error) {
+    console.error("Error checking verification status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error.",
+    });
+  }
+};
+
 exports.refreshToken = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
@@ -163,5 +200,98 @@ exports.logout = async (req, res) => {
   } catch (error) {
     console.error("Logout error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Utility function to generate OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000);
+};
+
+// Controller: Send OTP
+exports.sendOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return sendResponse(res, 400, false, "Email is required");
+    }
+
+    const user = await Customer.findOne({ email });
+    if (!user) {
+      return sendResponse(res, 404, false, "User not found");
+    }
+
+    // Generate OTP and set expiry
+    const otp = generateOTP();
+    const otpExpiry = new Date();
+    otpExpiry.setMinutes(otpExpiry.getMinutes() + 15);
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
+    await user.save();
+
+    // Prepare email content
+    const subject = "Your OTP Verification Code";
+    const message = `Your OTP is: ${otp}. This code will expire in 15 minutes.`;
+    const emailPayload = {
+      sender: { name: "Prolio", email: "developer@zikrabyte.in" },
+      to: [{ email }],
+      subject,
+      htmlContent: `<p>${message}</p>`,
+    };
+
+    console.log("Email payload:", emailPayload);
+    const response = await axios.post(BREVO_API_URL, emailPayload, {
+      headers: {
+        "api-key": BREVO_API_KEY,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+    });
+    if (response.status === 201) {
+      return sendResponse(res, 200, true, "OTP sent successfully");
+    } else {
+      console.log("Unexpected API response:", response.data);
+      throw new Error("Failed to send OTP");
+    }
+  } catch (error) {
+    console.error("Error sending OTP:", error.response?.data || error.message);
+    return sendResponse(res, 500, false, "Error sending OTP", error.message);
+  }
+};
+
+// Directly export the verifyOTP function
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return sendResponse(res, 400, false, "Email and OTP are required");
+    }
+    const user = await Customer.findOne({ email });
+    if (!user) {
+      return sendResponse(res, 404, false, "User not found");
+    }
+
+    // Check if OTP matches
+    const currentTime = new Date();
+    if (user.otp !== parseInt(otp)) {
+      return sendResponse(res, 400, false, "Invalid OTP");
+    }
+
+    // Check if OTP has expired
+    if (!user.otpExpiry || user.otpExpiry < currentTime) {
+      return sendResponse(res, 400, false, "OTP has expired");
+    }
+
+    // Clear OTP and expiry fields
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+    if (user.status === "UnVerified") {
+      user.status = "Verified";
+    }
+    await user.save();
+
+    return sendResponse(res, 200, true, "OTP verified successfully");
+  } catch (error) {
+    return sendResponse(res, 500, false, error.message);
   }
 };
