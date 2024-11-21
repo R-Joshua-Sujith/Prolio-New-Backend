@@ -14,16 +14,36 @@ const { uploadToS3 } = require("../../utils/s3FileUploader");
 //       address,
 //       yearsOfExp,
 //       memo,
+
 //       productsDealtWith,
 //     } = req.body;
 
-//     // const customerId = req.user._id;
 //     const customerId = req.user.id;
 
 //     // Check if product exists
 //     const product = await Product.findById(productId);
 //     if (!product) {
 //       return res.status(404).json({ error: "Product not found" });
+//     }
+
+//     let uploadedFiles = [];
+//     if (req.files && req.files.length > 0) {
+//       // Use Set to remove duplicate files
+//       const uniqueFiles = Array.from(
+//         new Set(req.files.map((f) => f.originalname))
+//       ).map((name) => req.files.find((f) => f.originalname === name));
+
+//       uploadedFiles = await Promise.all(
+//         uniqueFiles.map(async (file) => {
+//           const uploadResult = await uploadToS3(
+//             file.buffer,
+//             file.originalname,
+//             file.mimetype,
+//             "opportunities"
+//           );
+//           return uploadResult.url;
+//         })
+//       );
 //     }
 
 //     // Create new opportunity
@@ -38,6 +58,7 @@ const { uploadToS3 } = require("../../utils/s3FileUploader");
 //       memo,
 //       productsDealtWith,
 //       status: "Processing",
+//       documents: uploadedFiles, // Array of S3 URLs
 //     });
 
 //     await newOpportunity.save();
@@ -61,28 +82,49 @@ const submitOpportunity = async (req, res) => {
       address,
       yearsOfExp,
       memo,
-
       productsDealtWith,
     } = req.body;
 
     const customerId = req.user.id;
-    console.log("Product ID received:", req.body.productId);
-    console.log("Body", req.body);
+
+    // Input validations
+    const errors = [];
+
+    if (!productId)
+      errors.push({ field: "productId", message: "Product ID is required." });
+    if (!opportunity_role)
+      errors.push({
+        field: "opportunity_role",
+        message: "Opportunity role is required.",
+      });
+    if (!name) errors.push({ field: "name", message: "Name is required." });
+    if (!address)
+      errors.push({ field: "address", message: "Address is required." });
+    if (!yearsOfExp)
+      errors.push({
+        field: "yearsOfExp",
+        message: "Years of experience is required.",
+      });
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed.",
+        errors,
+      });
+    }
 
     // Check if product exists
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ error: "Product not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Product not found.",
+      });
     }
 
-    // Handle file uploads if any
-
-    console.log(req.files);
-    console.log(req.body);
-
+    // Handle file uploads
     let uploadedFiles = [];
     if (req.files && req.files.length > 0) {
-      // Use Set to remove duplicate files
       const uniqueFiles = Array.from(
         new Set(req.files.map((f) => f.originalname))
       ).map((name) => req.files.find((f) => f.originalname === name));
@@ -118,12 +160,17 @@ const submitOpportunity = async (req, res) => {
     await newOpportunity.save();
 
     res.status(201).json({
-      message: "Opportunity created successfully",
+      success: true,
+      message: "Opportunity created successfully.",
       opportunity: newOpportunity,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error.",
+      error: error.message,
+    });
   }
 };
 
@@ -171,23 +218,86 @@ const viewSingleOpportunity = async (req, res) => {
 };
 
 //View-All SENT OPPURTUNITY
+// const viewAllOpportunity = async (req, res) => {
+//   try {
+//     const loggedInUserId = req.user.id;
+
+//     console.log(loggedInUserId);
+
+//     // Find all opportunities where the logged-in user is the sender
+//     const opportunities = await OpportunityModel.find({
+//       customerId: loggedInUserId,
+//     })
+//       .populate("productId", "name description price") // Adjust fields as needed
+//       .populate("ownerId", "name email") // Adjust fields as needed
+//       .exec();
+
+//     if (opportunities.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "No opportunities found.",
+//         data: [],
+//       });
+//     }
+
+//     // Return the opportunities
+//     res.status(200).json({
+//       success: true,
+//       data: opportunities,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching opportunities:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
 const viewAllOpportunity = async (req, res) => {
   try {
-    // const loggedInUserId = req.user._id;
-    const loggedInUserId = "6735e1de6fc1600f43aea05d";
+    const loggedInUserId = req.user.id;
+
+    console.log(loggedInUserId);
 
     // Find all opportunities where the logged-in user is the sender
     const opportunities = await OpportunityModel.find({
       customerId: loggedInUserId,
     })
-      .populate("productId", "name description price") // Adjust fields as needed
+      .populate({
+        path: "productId",
+        select: "basicDetails name description price", // Include basicDetails
+        options: { strictPopulate: false }, // Add this to handle potential undefined fields
+      })
       .populate("ownerId", "name email") // Adjust fields as needed
       .exec();
+
+    if (opportunities.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No opportunities found.",
+        data: [],
+      });
+    }
+
+    // Optional: Transform the data to ensure consistent structure
+    const transformedOpportunities = opportunities.map((opportunity) => {
+      return {
+        ...opportunity.toObject(), // Convert to plain object
+        productId: {
+          _id: opportunity.productId?._id,
+          basicDetails: opportunity.productId?.basicDetails,
+          name: opportunity.productId?.name,
+          description: opportunity.productId?.description,
+          price: opportunity.productId?.price,
+        },
+      };
+    });
 
     // Return the opportunities
     res.status(200).json({
       success: true,
-      data: opportunities,
+      data: transformedOpportunities,
     });
   } catch (error) {
     console.error("Error fetching opportunities:", error);

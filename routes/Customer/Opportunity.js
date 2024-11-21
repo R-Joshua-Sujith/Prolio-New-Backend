@@ -3,16 +3,13 @@ const router = express.Router();
 const multer = require('multer');
 const storage = multer.memoryStorage(); // Store file in memory for S3 upload
 const multerS3 = require('multer-s3');
-const AWS = require('aws-sdk');
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const s3 = require("../../utils/s3FileUploader");
 
 
 const customerOpportunityController = require("../../controller/Customer/Opportunity");
 const { customerVerify } = require("../../controller/Customer/Middleware/auth");
 
-// router.get("/test", customerOpportunityController.test);
-
-// router.get("/test-verify", customerVerify, customerOpportunityController.test);
 
 
 const upload = multer({
@@ -48,12 +45,12 @@ router.post(
 
 router.get(
   "/viewSingleOpportunity/:opportunityId",
-  // customerVerify,
+  customerVerify,
   customerOpportunityController.viewSingleOpportunity
 );
 
 router.get(
-  "/viewAllOpportunity/:customerId",
+  "/viewAllSentOpportunity",
   customerVerify,
   customerOpportunityController.viewAllOpportunity
 );
