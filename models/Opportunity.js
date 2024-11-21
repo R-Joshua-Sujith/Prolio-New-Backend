@@ -1,26 +1,3 @@
-// const mongoose = require("mongoose");
-// const Schema = mongoose.Schema;
-
-// const opportunitySchema = new Schema({
-//   customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
-//   ownerId: { type: Schema.Types.ObjectId, ref: "Customer" },
-//   productId: { type: Schema.Types.ObjectId, ref: "Product" },
-//   opportunity_role: [{ type: String }],
-//   address: { type: String },
-//   yearsOfExp: { type: String },
-//   memo: { type: String },
-//   documents: [
-//     {
-//       url: { type: String },
-//       publicId: { type: String },
-//     },
-//   ],
-//   status: { type: String, enum: ["Processing", "Approved", "Rejected"] },
-//   remarks: { type: String },
-// });
-
-// module.exports = mongoose.model("Opportunity", opportunitySchema);
-
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
@@ -41,6 +18,11 @@ const opportunitySchema = new Schema(
       ref: "Product",
       required: true,
     },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     opportunity_role: {
       type: String,
       required: true,
@@ -57,6 +39,11 @@ const opportunitySchema = new Schema(
       required: true,
       trim: true,
     },
+    productsDealtWith: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     memo: {
       type: String,
       trim: true,
@@ -69,6 +56,10 @@ const opportunitySchema = new Schema(
     remarks: {
       type: String,
       trim: true,
+    },
+    documents: {
+      type: [String], // Array of strings (for file paths or URLs)
+      required: false, // Optional, as it may not always have files
     },
   },
   {
