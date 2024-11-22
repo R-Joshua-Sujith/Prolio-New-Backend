@@ -17,6 +17,7 @@ const apiRoutes = {
   // Admin routes
   admin: {
     auth: "/admin/auth",
+    banner: "/admin/banner",
     enquiry: "/admin/enquiry",
     product: "/admin/product",
   },
