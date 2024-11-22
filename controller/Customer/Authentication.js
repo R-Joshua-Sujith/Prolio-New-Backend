@@ -66,15 +66,12 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     const { errors, isValid } = validateLoginInput(email, password);
-
     if (!isValid) {
       return res.status(400).json({ success: false, errors });
     }
 
     const customer = await Customer.findOne({ email });
-
     if (!customer) {
       return res.status(401).json({
         success: false,
@@ -83,7 +80,6 @@ exports.login = async (req, res) => {
     }
 
     const isPasswordValid = bcrypt.compare(password, customer.password);
-
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -249,12 +245,9 @@ exports.sendOTP = async (req, res) => {
     });
     if (response.status === 201) {
       return sendResponse(res, 200, true, "OTP sent successfully");
-    } else {
-      console.log("Unexpected API response:", response.data);
-      throw new Error("Failed to send OTP");
     }
   } catch (error) {
-    console.error("Error sending OTP:", error.response?.data || error.message);
+    console.error("Error sending OTP:", error.message);
     return sendResponse(res, 500, false, "Error sending OTP", error.message);
   }
 };
@@ -270,14 +263,11 @@ exports.verifyOTP = async (req, res) => {
     if (!user) {
       return sendResponse(res, 404, false, "User not found");
     }
-
     // Check if OTP matches
     const currentTime = new Date();
     if (user.otp !== parseInt(otp)) {
       return sendResponse(res, 400, false, "Invalid OTP");
     }
-
-    // Check if OTP has expired
     if (!user.otpExpiry || user.otpExpiry < currentTime) {
       return sendResponse(res, 400, false, "OTP has expired");
     }
