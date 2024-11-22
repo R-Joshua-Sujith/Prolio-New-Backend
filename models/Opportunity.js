@@ -28,6 +28,12 @@ const opportunitySchema = new Schema(
       required: true,
       trim: true,
     },
+    mobileNumber: {
+      type: String,
+      required: true,
+      trim: true,
+      match: /^[0-9]{10}$/, // Validates for a 10-digit number
+    },
 
     address: {
       type: String,
