@@ -179,21 +179,16 @@ const viewSingleOpportunity = async (req, res) => {
   try {
     // const opportunityId = req.params.opportunityId;
     const opportunityId = "6736fb11169ffb11879b0506";
-
-    // Replace this with your actual way of getting the logged-in user's ID
-    // const loggedInUserId = req.user._id; // Adjust according to your auth setup
-    const loggedInUserId = "6735e1de6fc1600f43aea05d"; // Adjust according to your auth setup
-
+    const loggedInUserId = req.user?.id;
     // Find the opportunity
     const opportunity = await OpportunityModel.findOne({
       _id: opportunityId,
-      customerId: loggedInUserId, // Ensure the logged-in user is the sender
+      customerId: loggedInUserId,
     })
-      .populate("productId", "name description price") // Adjust fields as needed
-      .populate("ownerId", "name email") // Adjust fields as needed
+      .populate("productId", "name description price")
+      .populate("ownerId", "name email")
       .exec();
 
-    // If no opportunity found
     if (!opportunity) {
       return res.status(404).json({
         success: false,
@@ -202,7 +197,6 @@ const viewSingleOpportunity = async (req, res) => {
       });
     }
 
-    // Return the opportunity
     res.status(200).json({
       success: true,
       data: opportunity,
@@ -254,22 +248,21 @@ const viewSingleOpportunity = async (req, res) => {
 //     });
 //   }
 // };
+
 const viewAllOpportunity = async (req, res) => {
   try {
-    const loggedInUserId = req.user.id;
+    const loggedInUserId = req.user?.id;
+    console.log("loggedInUserId", loggedInUserId);
 
-    console.log(loggedInUserId);
-
-    // Find all opportunities where the logged-in user is the sender
     const opportunities = await OpportunityModel.find({
       customerId: loggedInUserId,
     })
       .populate({
         path: "productId",
-        select: "basicDetails name description price", // Include basicDetails
-        options: { strictPopulate: false }, // Add this to handle potential undefined fields
+        select: "basicDetails name description price",
+        options: { strictPopulate: false },
       })
-      .populate("ownerId", "name email") // Adjust fields as needed
+      .populate("ownerId", "name email")
       .exec();
 
     if (opportunities.length === 0) {
