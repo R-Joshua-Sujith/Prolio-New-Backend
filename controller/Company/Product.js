@@ -113,6 +113,7 @@ const getAllProducts = async (req, res) => {
         { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
       ];
     }
+
     if (category) {
       query["category.categoryId"] = category;
     }
@@ -126,7 +127,6 @@ const getAllProducts = async (req, res) => {
       .limit(limitNum);
 
     const totalProducts = await ProductModel.countDocuments(query);
-
     const categories = await ProductModel.distinct("category.categoryId");
     const subcategories = await ProductModel.distinct("category.subCategoryId");
 
