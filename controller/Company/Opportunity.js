@@ -208,7 +208,7 @@ const viewSingleOpportunityOwner = async (req, res) => {
 // Accept or Reject opportunity
 const updateOpportunityStatus = async (req, res) => {
   try {
-    const opportunityId = "673710644ee18db71883c4d6";
+    const opportunityId = "673ec7e0bd9b3ed5f160f1d0";
     const ownerId = "6735e1fe6fc1600f43aea060";
     const { status, remarks, force = false } = req.body; // Add force parameter
 
@@ -288,6 +288,7 @@ const updateOpportunityStatus = async (req, res) => {
   }
 };
 
+// Get oppurtunity Count for the Owner (Analytics)
 const getOpportunityCountsByOwner = async (req, res) => {
   try {
     const ownerId = "6735e1fe6fc1600f43aea060"; // Replace with actual ownerId
