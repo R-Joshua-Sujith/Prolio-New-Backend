@@ -31,4 +31,10 @@ router.get(
   companyOpportunityController.getOpportunityCountsByOwner
 );
 
+router.get(
+  "/getAllOpportunitiesForUser",
+  companyVerify,
+  companyOpportunityController.getAllOpportunitiesForUser
+);
+
 module.exports = router;

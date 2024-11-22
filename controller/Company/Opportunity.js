@@ -392,9 +392,46 @@ const getOpportunityCountsByOwner = async (req, res) => {
   }
 };
 
+//Get All oppurtunity for the user
+const getAllOpportunitiesForUser = async (req, res) => {
+  try {
+    const userId = req.user.id; // Get the logged-in user's ID
+
+    // Find opportunities where the owner is the same as the logged-in user
+    const opportunities = await OpportunityModel.find({ ownerId: userId })
+      .populate({
+        path: "productId",
+        select: "name description price",
+      })
+      .populate({
+        path: "customerId",
+        select: "name email phone profilePicture",
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    // Return the opportunities
+    res.status(200).json({
+      success: true,
+      data: {
+        opportunities: opportunities,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching user opportunities:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching user opportunities",
+      error: error.message,
+    });
+  }
+};
+
+
 module.exports = {
   viewProductOpportunities,
   viewSingleOpportunityOwner,
   updateOpportunityStatus,
   getOpportunityCountsByOwner,
+  getAllOpportunitiesForUser,
 };
