@@ -78,6 +78,7 @@ const submitOpportunity = async (req, res) => {
     const {
       productId,
       opportunity_role,
+      mobileNumber,
       name,
       address,
       yearsOfExp,
@@ -147,6 +148,7 @@ const submitOpportunity = async (req, res) => {
       customerId,
       ownerId: product.ownerId,
       name,
+      mobileNumber,
       productId,
       opportunity_role,
       address,
@@ -177,12 +179,8 @@ const submitOpportunity = async (req, res) => {
 // VIEW SENT OPPURTUNITY
 const viewSingleOpportunity = async (req, res) => {
   try {
-    // const opportunityId = req.params.opportunityId;
-    const opportunityId = "6736fb11169ffb11879b0506";
-
-    // Replace this with your actual way of getting the logged-in user's ID
-    // const loggedInUserId = req.user._id; // Adjust according to your auth setup
-    const loggedInUserId = "6735e1de6fc1600f43aea05d"; // Adjust according to your auth setup
+    const opportunityId = req.params.opportunityId;
+    const loggedInUserId = req.user.id; // Adjust according to your auth setup
 
     // Find the opportunity
     const opportunity = await OpportunityModel.findOne({
