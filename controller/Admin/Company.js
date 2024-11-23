@@ -80,12 +80,14 @@ exports.getPendingCompanyUsers = async (req, res) => {
 
         const totalPendingCompanies = await CustomerModel.countDocuments({
             'isCompany.applied': true,
-            'isCompany.verified': false
+            'isCompany.verified': false,
+            'isCompany.rejected': false
         });
 
         const pendingCompanies = await CustomerModel.find({
             'isCompany.applied': true,
-            'isCompany.verified': false
+            'isCompany.verified': false,
+            'isCompany.rejected': false
         })
             .select('-password -refreshToken -otp -otpExpiry')
             .limit(limit)
@@ -105,6 +107,58 @@ exports.getPendingCompanyUsers = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error fetching pending companies",
+            error: error.message
+        });
+    }
+};
+
+exports.updateCompanyStatus = async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { status } = req.body;
+
+        if (!companyId || !status) {
+            return res.status(400).json({
+                success: false,
+                message: "Company ID and status are required"
+            });
+        }
+
+        if (!["verified", "rejected"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status. Status must be 'verified' or 'rejected'"
+            });
+        }
+
+        const updateFields = {
+            'isCompany.verified': status === 'verified',
+            'isCompany.rejected': status === 'rejected'
+        };
+
+        const company = await CustomerModel.findByIdAndUpdate(
+            companyId,
+            { $set: updateFields },
+            { new: true }
+        ).select('-password -refreshToken -otp -otpExpiry');
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: "Company not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Company ${status} successfully`,
+            data: company
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error updating company status",
             error: error.message
         });
     }

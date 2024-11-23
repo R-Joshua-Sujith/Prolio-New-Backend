@@ -7,5 +7,7 @@ const { customerVerify } = require("../../controller/Customer/Middleware/auth");
 router.get("/test", customerProductController.test);
 router.get("/test-verify", customerVerify, customerProductController.test);
 
+router.get("/get-single-product/:slug", customerProductController.getProduct);
+
 
 module.exports = router;
