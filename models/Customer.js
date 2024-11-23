@@ -20,13 +20,13 @@ const customerSchema = new Schema(
     password: { type: String },
     phone: { type: String },
     profile: {
-      url: String,
-      publicId: String,
+      url: { type: String },
+      publicId: { type: String },
     },
     isCompany: {
       applied: { type: Boolean, default: false },
       verified: { type: Boolean, default: false },
-      rejected: { type: Boolean, default: false }
+      rejected: { type: Boolean, default: false },
     },
     isInfluencer: {
       applied: { type: Boolean, default: false },
@@ -39,7 +39,7 @@ const customerSchema = new Schema(
         yearEstablishment: { type: Number },
         gstNo: { type: String },
         businessType: { type: String },
-        totalEmployees: { type: Number }
+        totalEmployees: { type: Number },
       },
       contactInfo: {
         address: { type: String },
@@ -47,16 +47,18 @@ const customerSchema = new Schema(
         state: { type: String },
         pincode: { type: String },
         email: { type: String },
-        phone: { type: String }
+        phone: { type: String },
       },
       companyLogo: {
         url: { type: String },
-        publicId: { type: String }
+        publicId: { type: String },
       },
-      documents: [{
-        url: { type: String },
-        publicId: { type: String }
-      }]
+      documents: [
+        {
+          url: { type: String },
+          publicId: { type: String },
+        },
+      ],
     },
     influencerDetails: { type: mongoose.Schema.Types.Mixed },
     wishList: [

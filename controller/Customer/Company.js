@@ -1,6 +1,7 @@
 const express = require("express");
 const Customer = require("../../models/Customer");
 const { uploadToS3 } = require("../../utils/s3FileUploader");
+const { sendResponse } = require("../../utils/responseHandler");
 
 const companyController = {
   /**
@@ -88,6 +89,32 @@ const companyController = {
     } catch (error) {
       console.error("Error uploading files:", error);
       res.status(500).json({ message: "Failed to register company", error });
+    }
+  },
+
+  checkCompanyStatus: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await Customer.findById(userId, "isCompany status");
+
+      if (!user) {
+        return sendResponse(res, 404, false, "User not found");
+      }
+      const isCompanyVerified = user.isCompany?.verified || false;
+
+      return sendResponse(
+        res,
+        200,
+        true,
+        "Company status fetched successfully",
+        {
+          status: user.status,
+          isCompanyVerified,
+        }
+      );
+    } catch (error) {
+      console.error("Error fetching company status:", error.message);
+      return sendResponse(res, 500, false, "Error fetching company status");
     }
   },
 };
