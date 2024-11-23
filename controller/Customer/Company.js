@@ -15,7 +15,7 @@ const companyController = {
    */
   registerCompany: async (req, res) => {
     const { formData, contactData } = req.body;
-    const userId = "673edb20d02d24bac67f993e"; // Assuming you have the user's ID from the auth middleware
+    const userId = "673edb20d02d24bac67f993e";
 
     try {
       // Find the existing customer by user ID
@@ -27,7 +27,6 @@ const companyController = {
         });
       }
 
-      // Check if the customer has already applied as a company
       if (existingCustomer.isCompany.applied) {
         return res.status(400).json({
           message: "Company registration already applied",
@@ -52,18 +51,16 @@ const companyController = {
           email: contactData.email,
           phone: contactData.phone,
         },
-        companyLogo: formData.companyLogo, // Optional: logo data if provided
-        documents: formData.documents || [], // Optional: uploaded documents
+        companyLogo: formData.companyLogo,
+        documents: formData.documents || [],
       };
 
-      // Update the isCompany field
       existingCustomer.isCompany = {
         applied: true,
         verified: false,
         rejected: false,
       };
 
-      // Save the updated customer document
       const updatedCustomer = await existingCustomer.save();
 
       res.status(200).json({
