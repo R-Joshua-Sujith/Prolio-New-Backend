@@ -12,48 +12,29 @@ const companyController = {
    * @param {Object} res -response object
    * @returns {void}
    */
-
   registerCompany: async (req, res) => {
     const { formData, contactData } = req.body;
-    const userId = "673edb20d02d24bac67f993e";
+    const userId = "673edb20d02d24bac67f993e"; // Assuming you have the user's ID from the auth middleware
 
-    // 'formData' and 'contactData' should already be parsed as objects
-    const documents = req.files?.documents || [];
-    const companyLogo = req.files?.companyLogo?.[0];
-
-    const saveFiles = [];
     try {
-      // Upload documents to S3
-      for (const doc of documents) {
-        const uploadedDoc = await uploadToS3(
-          doc.buffer,
-          doc.originalname,
-          doc.mimetype,
-          "company/documents"
-        );
-        saveFiles.push({
-          url: uploadedDoc.url,
-          publicId: uploadedDoc.filename,
+      // Find the existing customer by user ID
+      const existingCustomer = await Customer.findById(userId);
+
+      if (!existingCustomer) {
+        return res.status(404).json({
+          message: "Customer not found",
         });
       }
 
-      // Upload company logo to S3
-      let savedCompanyLogo = null;
-      if (companyLogo) {
-        const uploadedLogo = await uploadToS3(
-          companyLogo.buffer,
-          companyLogo.originalname,
-          companyLogo.mimetype,
-          "company/logos"
-        );
-        savedCompanyLogo = {
-          url: uploadedLogo.url,
-          publicId: uploadedLogo.filename,
-        };
+      // Check if the customer has already applied as a company
+      if (existingCustomer.isCompany.applied) {
+        return res.status(400).json({
+          message: "Company registration already applied",
+        });
       }
 
-      // Prepare data for saving to the database
-      const companyData = {
+      // Update the customer document with company details
+      existingCustomer.companyDetails = {
         companyInfo: {
           companyName: formData.companyName,
           ownerName: formData.ownerName,
@@ -70,26 +51,34 @@ const companyController = {
           email: contactData.email,
           phone: contactData.phone,
         },
-        companyLogo: savedCompanyLogo,
-        documents: saveFiles,
+        companyLogo: formData.companyLogo, // Optional: logo data if provided
+        documents: formData.documents || [], // Optional: uploaded documents
       };
 
-      // Update the customer record in the database
-      const customer = await Customer.findByIdAndUpdate(
-        userId,
-        { "isCompany.applied": true, companyDetails: companyData },
-        { new: true }
-      );
+      // Update the isCompany field
+      existingCustomer.isCompany = {
+        applied: true,
+        verified: false,
+        rejected: false,
+      };
+
+      // Save the updated customer document
+      const updatedCustomer = await existingCustomer.save();
 
       res.status(200).json({
         message: "Company registered successfully",
-        companyDetails: customer.companyDetails,
+        companyDetails: updatedCustomer.companyDetails,
       });
     } catch (error) {
-      console.error("Error uploading files:", error);
-      res.status(500).json({ message: "Failed to register company", error });
+      console.error("Error registering company:", error);
+      res.status(500).json({
+        message: "Failed to register company",
+        error: error.message,
+      });
     }
   },
+
+
 };
 
 module.exports = companyController;

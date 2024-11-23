@@ -9,4 +9,6 @@ router.get("/un-verified", adminCompanyController.getPendingCompanyUsers);
 
 router.get("/rejected", adminCompanyController.getRejectedCompanyUsers);
 
+router.put("/change-status/:companyId",adminCompanyController.updateCompanyStatus)
+
 module.exports = router;
