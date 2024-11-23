@@ -18,6 +18,7 @@ const opportunitySchema = new Schema(
       ref: "Product",
       required: true,
     },
+
     name: {
       type: String,
       required: true,

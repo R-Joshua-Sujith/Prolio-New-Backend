@@ -6,11 +6,10 @@ const mongoose = require("mongoose");
 // View Opportunity for specific Producct
 const viewProductOpportunities = async (req, res) => {
   try {
-    // Simulate getting the logged-in owner's ID (replace with actual auth method)
-    const ownerId = "6735e1fe6fc1600f43aea060"; // Replace with actual auth method
+    const ownerId = req.user.id;
 
     // Get productId from params or query
-    const productId = "67364cf9106f770f98c275bf"; // Replace with req.params.productId or req.query.productId
+    const productId = req.body;
 
     // Verify the product belongs to the owner
     const product = await ProductModel.findOne({
@@ -146,10 +145,10 @@ const viewProductOpportunities = async (req, res) => {
 const viewSingleOpportunityOwner = async (req, res) => {
   try {
     // Simulate getting the logged-in owner's ID (replace with actual auth method)
-    const ownerId = "67371e8a425771ce15f098df"; // Replace with actual auth logic
+    const ownerId = req.user.id; // Replace with actual auth logic
 
     // Get opportunityId from params
-    const opportunityId = "673722b052d03f444f697ec6"; // Replace with req.params.opportunityId
+    const opportunityId = req.body; // Replace with req.params.opportunityId
 
     // Find the opportunity and populate necessary fields
     const opportunity = await OpportunityModel.findOne({
@@ -208,8 +207,8 @@ const viewSingleOpportunityOwner = async (req, res) => {
 // Accept or Reject opportunity
 const updateOpportunityStatus = async (req, res) => {
   try {
-    const opportunityId = "673ec7e0bd9b3ed5f160f1d0";
-    const ownerId = "6735e1fe6fc1600f43aea060";
+    const opportunityId = req.params.opportnityId;
+    const ownerId = req.user.id;
     const { status, remarks, force = false } = req.body; // Add force parameter
 
     // Validate input
@@ -291,7 +290,7 @@ const updateOpportunityStatus = async (req, res) => {
 // Get oppurtunity Count for the Owner (Analytics)
 const getOpportunityCountsByOwner = async (req, res) => {
   try {
-    const ownerId = "6735e1fe6fc1600f43aea060"; // Replace with actual ownerId
+    const ownerId = req.user.id; // Replace with actual ownerId
 
     // First, find all products owned by this owner
     const ownerProducts = await ProductModel.find({ ownerId: ownerId }, "_id");
@@ -401,7 +400,7 @@ const getAllOpportunitiesForUser = async (req, res) => {
     const opportunities = await OpportunityModel.find({ ownerId: userId })
       .populate({
         path: "productId",
-        select: "name description price",
+        select: "basicDetails images",
       })
       .populate({
         path: "customerId",
@@ -426,7 +425,6 @@ const getAllOpportunitiesForUser = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   viewProductOpportunities,

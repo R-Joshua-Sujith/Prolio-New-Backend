@@ -20,7 +20,7 @@ router.get(
 );
 
 router.get(
-  "/Update-status-opportunity",
+  "/Update-status-opportunity/:opportnityId",
   companyVerify,
   companyOpportunityController.updateOpportunityStatus
 );
