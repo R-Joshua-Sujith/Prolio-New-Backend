@@ -2,7 +2,7 @@ const EnquiryModel = require("../../models/Enquiry");
 const CustomerModel = require("../../models/Customer");
 const CompanyUserModel = require("../../models/CompanyUser");
 const ProductModel = require("../../models/Product");
-const { apiResponse } = require("../../utils/responseHandler");
+const { apiResponse, sendResponse } = require("../../utils/responseHandler");
 
 const enquiryController = {
   /**
@@ -97,42 +97,101 @@ const enquiryController = {
    * @param {number} limit - Number of messages per page (default: 10)
    * @returns {Object} Paginated messages and metadata
    */
-  getEnquiryMessages: async (req, res) => {
+  getEnquiryByProductId: async (req, res) => {
     try {
-      const { enquiryId } = req.params;
+      const { productId } = req.params;
       const page = parseInt(req.query.page, 10) || 1;
       const limit = parseInt(req.query.limit, 10) || 10;
       const skip = (page - 1) * limit;
 
-      const enquiry = await EnquiryModel.findById(enquiryId);
+      // Find the enquiry by productId
+      const enquiry = await EnquiryModel.findOne({ productId: productId });
       if (!enquiry) {
-        return apiResponse.error(res, 404, "Enquiry not found");
+        return apiResponse.error(
+          res,
+          404,
+          "Enquiry not found for this product"
+        );
       }
 
       const userId = req.user.id;
       const customerId = enquiry.customerId.toString();
       const ownerId = enquiry.ownerId.toString();
 
+      // Check if the current user is authorized to access this enquiry
       if (![customerId, ownerId].includes(userId.toString())) {
-        return apiResponse.error(res, 403, "Unauthorized access to enquiry");
+        return apiResponse.error(
+          res,
+          403,
+          "Unauthorized access to this enquiry"
+        );
       }
 
       const totalMessages = enquiry.messages.length;
       const messages = enquiry.messages
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(skip, skip + limit);
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Sort messages by latest first
+        .slice(skip, skip + limit); // Apply pagination (skip + limit)
+
       return apiResponse.success(res, 200, "Messages retrieved successfully", {
         messages,
         pagination: {
           currentPage: page,
           totalPages: Math.ceil(totalMessages / limit),
           totalMessages,
-          hasMore: skip + limit < totalMessages,
+          hasMore: skip + limit < totalMessages, // Check if there are more messages
         },
       });
     } catch (error) {
-      console.error("Error retrieving messages:", error);
+      console.error("Error retrieving messages by productId:", error);
       return apiResponse.error(res, 500, "Error retrieving messages", error);
+    }
+  },
+
+  getMyEnquiries: async (req, res) => {
+    try {
+      const customerId = req.user.id;
+      // Query the database for enquiries
+      const enquiries = await EnquiryModel.find({ customerId })
+        .populate({
+          path: "productId",
+          select: "basicDetails",
+        })
+        .populate("ownerId", "name")
+        .select("productId ownerId status messages createdAt");
+
+      // Format the response data
+      const formattedEnquiries = enquiries.map((enquiry) => ({
+        product: {
+          id: enquiry.productId?._id || null,
+          basicDetails: enquiry.productId?.basicDetails || null,
+        },
+        vendor: {
+          id: enquiry.ownerId?._id || null,
+          name: enquiry.ownerId.name || null,
+        },
+        status: enquiry.status || "Unknown",
+        appliedDtae:
+          enquiry.messages?.[enquiry.messages.length - 1]?.createdAt || null,
+        createdAt: enquiry.createdAt,
+      }));
+
+      // Send the formatted data as a response
+      sendResponse(
+        res,
+        200,
+        true,
+        formattedEnquiries,
+        "Enquiries fetched successfully"
+      );
+    } catch (error) {
+      // Handle any errors
+      sendResponse(
+        res,
+        500,
+        false,
+        null,
+        error.message || "Internal Server Error"
+      );
     }
   },
 };

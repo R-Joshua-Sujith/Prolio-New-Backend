@@ -8,14 +8,20 @@ router.get("/test-verify", customerVerify, customerEnquiryController.test);
 
 // Customer routes
 router.post(
-  "/initiateEnquiry",
+  "/initiate-enquiry",
   customerVerify,
   customerEnquiryController.initiateEnquiry
 );
 router.get(
-  "/messages/:enquiryId",
+  "/messages/:productId",
   customerVerify,
-  customerEnquiryController.getEnquiryMessages
+  customerEnquiryController.getEnquiryByProductId
+);
+
+router.get(
+  "/my-enquiry",
+  customerVerify,
+  customerEnquiryController.getMyEnquiries
 );
 
 module.exports = router;
