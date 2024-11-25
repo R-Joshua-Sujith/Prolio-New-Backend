@@ -3,7 +3,7 @@ const CustomerModel = require("../../models/Customer");
 const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 const { default: mongoose } = require("mongoose");
-
+const CategoryModel = require("../../models/Category");
 /**
  *  Function to check the API is working
  */
@@ -113,7 +113,6 @@ const getAllProducts = async (req, res) => {
         { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
       ];
     }
-
     if (category) {
       query["category.categoryId"] = category;
     }
@@ -121,58 +120,103 @@ const getAllProducts = async (req, res) => {
       query["category.subCategoryId"] = subcategory;
     }
 
-    const products = await ProductModel.find(query)
-      .populate("category.categoryId", "name")
-      .skip(skip)
-      .limit(limitNum);
-
+    // Fetch products
+    const products = await ProductModel.find(query).skip(skip).limit(limitNum);
     const totalProducts = await ProductModel.countDocuments(query);
-    const categories = await ProductModel.distinct("category.categoryId");
-    const subcategories = await ProductModel.distinct("category.subCategoryId");
 
-    const transformedData = products.map((product) => {
-      const primaryImage = product.images[0]?.url || "No Image Available";
-      const secondaryImage = product.images[1]?.url || "No Secondary Image";
+    // Fetch all categories with subcategories
+    const allCategories = await CategoryModel.find(
+      {},
+      "categoryName subCategories"
+    );
+    const categoryMap = new Map();
+    const subcategoryMap = new Map();
 
-      const price = product.basicDetails.price || "Price not available";
-
-      return {
-        id: product._id,
-        userId: product.ownerId,
-        companyId: product.companyId?._id || null,
-        productName: product.basicDetails.name || "Unknown Product",
-        slug: product.basicDetails.slug,
-        brandName: product.companyId?.companyName || "Unknown Company",
-        price,
-        productImage: primaryImage,
-        secondaryProductImage: secondaryImage,
-        category: product.category.categoryId?.name || "Unknown Category",
-        subcategory: product.category.subCategoryId || "Unknown Subcategory",
-      };
+    allCategories.forEach((category) => {
+      categoryMap.set(category._id.toString(), category.categoryName);
+      category.subCategories.forEach((sub) => {
+        subcategoryMap.set(sub._id.toString(), sub.name);
+      });
     });
+
+    // Get distinct category and subcategory IDs
+    const distinctCategoryIds = await ProductModel.distinct(
+      "category.categoryId"
+    );
+    const distinctSubcategoryIds = await ProductModel.distinct(
+      "category.subCategoryId"
+    );
+
+    const categories = distinctCategoryIds
+      .map((id) => ({
+        id: id,
+        name: categoryMap.get(id.toString()) || "Unknown Category",
+      }))
+      .filter((cat) => cat.name !== "Unknown Category");
+
+    const subcategories = distinctSubcategoryIds
+      .map((id) => ({
+        id: id,
+        name: subcategoryMap.get(id.toString()) || "Unknown Subcategory",
+      }))
+      .filter((sub) => sub.name !== "Unknown Subcategory");
+
+    // Fetch additional data for products
+    const transformedData = await Promise.all(
+      products.map(async (product) => {
+        const customer = await CustomerModel.findOne(
+          { _id: product.ownerId },
+          "companyDetails.companyInfo.companyName"
+        );
+        const companyName =
+          customer?.companyDetails?.companyInfo?.companyName ||
+          "Unknown Company";
+
+        // Get category and subcategory names from our maps
+        const categoryName =
+          categoryMap.get(product.category.categoryId?.toString()) ||
+          "Unknown Category";
+        const subcategoryName =
+          subcategoryMap.get(product.category.subCategoryId?.toString()) ||
+          "Unknown Subcategory";
+
+        // Transform product data
+        const primaryImage = product.images[0]?.url || "No Image Available";
+        const secondaryImage = product.images[1]?.url || "No Secondary Image";
+        const price = product.basicDetails.price || "Price not available";
+
+        return {
+          id: product._id,
+          userId: product.ownerId,
+          companyId: product.companyId?._id || null,
+          productName: product.basicDetails.name || "Unknown Product",
+          slug: product.basicDetails.slug,
+          brandName: companyName,
+          price,
+          productImage: primaryImage,
+          secondaryProductImage: secondaryImage,
+          category: categoryName,
+          subcategory: subcategoryName,
+        };
+      })
+    );
 
     const totalPages = Math.ceil(totalProducts / limitNum);
 
-    res.status(200).json({
+    // Prepare response with named categories and subcategories
+    return sendResponse(res, 200, "Products fetched successfully", {
       products: transformedData,
       totalItems: totalProducts,
       totalPages,
       currentPage: pageNum,
-      categories,
-      subcategories,
+      categories: categories,
+      subcategories: subcategories,
     });
   } catch (error) {
     console.error("Error fetching product details:", error.message);
-
-    if (error instanceof mongoose.Error) {
-      return res
-        .status(400)
-        .json({ error: "Database Error", details: error.message });
-    }
-
-    res
-      .status(500)
-      .json({ error: "Internal Server Error", details: error.message });
+    return sendResponse(res, 500, "Internal Server Error", {
+      details: error.message,
+    });
   }
 };
 
