@@ -207,6 +207,7 @@ const generateOTP = () => {
 
 // Controller: Send OTP
 exports.sendOTP = async (req, res) => {
+  console.log("hi")
   try {
     const { email } = req.body;
     if (!email) {
