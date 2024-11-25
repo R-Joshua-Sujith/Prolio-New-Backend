@@ -14,13 +14,13 @@ router.get(
 
 // View SingleOppurtunity
 router.get(
-  "/view-single-opportunity",
+  "/view-single-opportunity/:opportunityId",
   companyVerify,
   companyOpportunityController.viewSingleOpportunityOwner
 );
 
-router.get(
-  "/Update-status-opportunity",
+router.post(
+  "/Update-status-opportunity/:opportnityId",
   companyVerify,
   companyOpportunityController.updateOpportunityStatus
 );

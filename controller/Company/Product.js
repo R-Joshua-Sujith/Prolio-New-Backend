@@ -25,9 +25,25 @@ const createProduct = async (req, res) => {
   try {
     const { formData } = JSON.parse(req.body.data);
 
-    console.log("hi", req.body);
+    let ownerId = req.user.id;
 
-    let ownerId = "6735e1fe6fc1600f43aea060";
+    if (!ownerId) {
+      return sendResponse(res, 500, true, "User ID Not Found");
+    }
+
+    // Check if product with same id or slug already exists
+    const existingProduct = await ProductModel.findOne({
+      $or: [
+        { 'basicDetails.id': formData.basicDetails.id },
+        { 'basicDetails.slug': formData.basicDetails.slug }
+      ]
+    });
+
+    if (existingProduct) {
+      const duplicateField = existingProduct.basicDetails.id === formData.basicDetails.id ? 'id' : 'slug';
+      return sendResponse(res, 400, false, `Product with this ${duplicateField} already exists`);
+    }
+
 
     const uploadedImages = await Promise.all(
       (req.files || []).map(async (file) => {
@@ -220,9 +236,196 @@ const getAllProducts = async (req, res) => {
   }
 };
 
+
+const checkProductIdUnique = async (req, res) => {
+  console.log(req.query)
+  try {
+    const { id } = req.query;
+
+    if (!id) {
+      return sendResponse(res, 400, false, "Product ID is required");
+    }
+
+    const existingProduct = await ProductModel.findOne({
+      'basicDetails.id': id
+    });
+
+    const isUnique = !existingProduct;
+
+    sendResponse(res, 200, true, "Product ID check completed", {
+      isUnique,
+      message: isUnique ? "Product ID is available" : "Product ID already exists"
+    });
+
+  } catch (error) {
+    console.error("Error checking product ID:", error);
+    sendResponse(res, 500, false, "Error checking product ID", {
+      details: error.message
+    });
+  }
+};
+
+const checkSlugUnique = async (req, res) => {
+  try {
+    const { slug } = req.query;
+
+    if (!slug) {
+      return sendResponse(res, 400, false, "Slug is required");
+    }
+
+    const existingProduct = await ProductModel.findOne({
+      'basicDetails.slug': slug
+    });
+
+    const isUnique = !existingProduct;
+
+    sendResponse(res, 200, true, "Slug check completed", {
+      isUnique,
+      message: isUnique ? "Slug is available" : "Slug already exists"
+    });
+
+  } catch (error) {
+    console.error("Error checking slug:", error);
+    sendResponse(res, 500, false, "Error checking slug", {
+      details: error.message
+    });
+  }
+};
+
+const getAllCompanyProducts = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+    } = req.query;
+
+    const ownerId = req.user.id; // Get ownerId from route parameters
+    // Or if you're passing it in query: const { ownerId } = req.query;
+
+    // Convert page and limit to numbers
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build query object with ownerId
+    let query = { ownerId }; // Add ownerId to base query
+
+    // Search functionality
+    if (search) {
+      query.$and = [ // Use $and to combine ownerId and search conditions
+        { ownerId },
+        {
+          $or: [
+            { "basicDetails.name": { $regex: search, $options: "i" } },
+            { "basicDetails.id": { $regex: search, $options: "i" } },
+            { "basicDetails.slug": { $regex: search, $options: "i" } },
+            { "basicDetails.description": { $regex: search, $options: "i" } }
+          ]
+        }
+      ];
+    }
+
+    // Execute query with pagination
+    const products = await ProductModel.find(query)
+      .select('basicDetails images') // Only select the fields we need
+      .sort({ createdAt: -1 }) // Sort by newest first
+      .skip(skip)
+      .limit(limitNum);
+
+    // Get total count for pagination
+    const totalProducts = await ProductModel.countDocuments(query);
+    const totalPages = Math.ceil(totalProducts / limitNum);
+
+    // Transform the data for response
+    const transformedProducts = products.map(product => ({
+      id: product._id,
+      productId: product.basicDetails.id,
+      name: product.basicDetails.name,
+      slug: product.basicDetails.slug,
+      price: product.basicDetails.price,
+      description: product.basicDetails.description,
+      image: product.images[0]?.url || null, // Get only the first image URL
+    }));
+
+    sendResponse(res, 200, true, "Products fetched successfully", {
+      products: transformedProducts,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalItems: totalProducts,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    sendResponse(res, 500, false, "Error fetching products", {
+      details: error.message
+    });
+  }
+};
+
+const getProductById = async (req, res) => {
+  console.log("hi")
+  try {
+    const { productId } = req.params;
+    const ownerId = req.user.id;
+
+    // Find product with both productId and ownerId to ensure ownership
+    const product = await ProductModel.findOne({
+      _id: productId,
+      ownerId
+    });
+
+    // Check if product exists and belongs to the user
+    if (!product) {
+      return sendResponse(res, 404, false, "Product not found", null);
+    }
+
+    // Transform the data for response
+    const transformedProduct = {
+      id: product._id,
+      category: product.category,
+      basicDetails: product.basicDetails,
+      colors: product.colors,
+      attributes: product.attributes,
+      opportunities: product.opportunities,
+      images: product.images,
+      dynamicSteps: product.dynamicSteps,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt
+    };
+
+    sendResponse(res, 200, true, "Product fetched successfully", {
+      product: transformedProduct
+    });
+
+  } catch (error) {
+    console.error("Error fetching product:", error);
+
+    // Handle specific MongoDB invalid ObjectId error
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+      return sendResponse(res, 400, false, "Invalid product ID format", null);
+    }
+
+    sendResponse(res, 500, false, "Error fetching product", {
+      details: error.message
+    });
+  }
+};
+
+
+
+
 module.exports = {
   test,
   createProduct,
   deleteProduct,
   getAllProducts,
+  checkSlugUnique,
+  checkProductIdUnique,
+  getAllCompanyProducts,
+  getProductById
 };
