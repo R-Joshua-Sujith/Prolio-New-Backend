@@ -22,5 +22,9 @@ router.get(
   companyVerify,
   companyEnquiryController.getEnquiryMessages
 );
+router.get(
+  "/customer-profile/:enquiryId",
+  companyEnquiryController.getCustomerDetailsByEnquiryId
+);
 
 module.exports = router;

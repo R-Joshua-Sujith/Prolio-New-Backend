@@ -2,6 +2,7 @@ const EnquiryModel = require("../../models/Enquiry");
 const CustomerModel = require("../../models/Customer");
 const { sendResponse, apiResponse } = require("../../utils/responseHandler");
 const ProductModel = require("../../models/Product");
+const { default: mongoose } = require("mongoose");
 
 const enquiryController = {
   /**
@@ -79,7 +80,6 @@ const enquiryController = {
       const userProducts = await ProductModel.find({ ownerId: userId }).select(
         "_id"
       );
-
       if (!userProducts || userProducts.length === 0) {
         return sendResponse(
           res,
@@ -89,11 +89,7 @@ const enquiryController = {
           "No products found for the user."
         );
       }
-
-      // Extract the product IDs
       const productIds = userProducts.map((product) => product._id);
-
-      // Query the enquiries related to the user's products
       const enquiries = await EnquiryModel.find({
         productId: { $in: productIds },
       })
@@ -114,7 +110,7 @@ const enquiryController = {
         },
         vendor: {
           id: enquiry.customerId?._id || null,
-          name: enquiry.customerId?.name || null, // Vendor name
+          name: enquiry.customerId?.name || null,
         },
         status: enquiry.status || "Unknown",
         appliedDtae:
@@ -184,6 +180,42 @@ const enquiryController = {
     } catch (error) {
       console.error("Error retrieving messages:", error);
       return apiResponse.error(res, 500, "Error retrieving messages", error);
+    }
+  },
+
+  getCustomerDetailsByEnquiryId: async (req, res) => {
+    try {
+      const { enquiryId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(enquiryId)) {
+        return sendResponse.error(res, 400, "Invalid enquiry ID format");
+      }
+      // Find the enquiry by enquiryId
+      const enquiry = await EnquiryModel.findById(enquiryId).populate({
+        path: "customerId", 
+        select: "email name status profile",
+      });
+
+      if (!enquiry.customerId) {
+        return sendResponse(res, 404, "Customer not found");
+      }
+      return sendResponse(
+        res,
+        200,
+        true,
+        "Customer details retrieved successfully",
+        {
+          customer: enquiry.customerId,
+        }
+      );
+    } catch (error) {
+      console.error("Error in getCustomerDetailsByEnquiryId:", error);
+      return sendResponse(
+        res,
+        500,
+        false,
+        "Internal server error",
+        error.message
+      );
     }
   },
 };
