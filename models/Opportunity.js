@@ -46,6 +46,12 @@ const opportunitySchema = new Schema(
       required: true,
       trim: true,
     },
+    email: {
+      type: String,
+      required: true,
+      trim: true,
+      match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, // Validates for a basic email format
+    },
     productsDealtWith: {
       type: String,
       required: true,
@@ -64,10 +70,14 @@ const opportunitySchema = new Schema(
       type: String,
       trim: true,
     },
-    documents: {
-      type: [String], // Array of strings (for file paths or URLs)
-      required: false, // Optional, as it may not always have files
-    },
+    documents: [
+      {
+        url: { type: String, required: true }, // URL of the document
+        publicId: { type: String, required: true }, // Identifier for the file (e.g., from cloud storage)
+      },
+    ],
+
+    // Optional, as documents may not always be uploaded
   },
   {
     timestamps: true,

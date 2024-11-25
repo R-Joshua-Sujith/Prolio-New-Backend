@@ -5,74 +5,6 @@ const mongoose = require("mongoose");
 const { uploadToS3 } = require("../../utils/s3FileUploader");
 
 // CREATE OPPURTUNITY
-// const submitOpportunity = async (req, res) => {
-//   try {
-//     const {
-//       productId,
-//       opportunity_role,
-//       name,
-//       address,
-//       yearsOfExp,
-//       memo,
-
-//       productsDealtWith,
-//     } = req.body;
-
-//     const customerId = req.user.id;
-
-//     // Check if product exists
-//     const product = await Product.findById(productId);
-//     if (!product) {
-//       return res.status(404).json({ error: "Product not found" });
-//     }
-
-//     let uploadedFiles = [];
-//     if (req.files && req.files.length > 0) {
-//       // Use Set to remove duplicate files
-//       const uniqueFiles = Array.from(
-//         new Set(req.files.map((f) => f.originalname))
-//       ).map((name) => req.files.find((f) => f.originalname === name));
-
-//       uploadedFiles = await Promise.all(
-//         uniqueFiles.map(async (file) => {
-//           const uploadResult = await uploadToS3(
-//             file.buffer,
-//             file.originalname,
-//             file.mimetype,
-//             "opportunities"
-//           );
-//           return uploadResult.url;
-//         })
-//       );
-//     }
-
-//     // Create new opportunity
-//     const newOpportunity = new OpportunityModel({
-//       customerId,
-//       ownerId: product.ownerId,
-//       name,
-//       productId,
-//       opportunity_role,
-//       address,
-//       yearsOfExp,
-//       memo,
-//       productsDealtWith,
-//       status: "Processing",
-//       documents: uploadedFiles, // Array of S3 URLs
-//     });
-
-//     await newOpportunity.save();
-
-//     res.status(201).json({
-//       message: "Opportunity created successfully",
-//       opportunity: newOpportunity,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// };
-
 const submitOpportunity = async (req, res) => {
   try {
     const {
@@ -83,6 +15,7 @@ const submitOpportunity = async (req, res) => {
       address,
       yearsOfExp,
       memo,
+      email,
       productsDealtWith,
     } = req.body;
 
@@ -138,7 +71,11 @@ const submitOpportunity = async (req, res) => {
             file.mimetype,
             "opportunities"
           );
-          return uploadResult.url;
+          // Assuming uploadToS3 returns an object with URL and filename
+          return {
+            url: uploadResult.url, // The URL of the uploaded file
+            publicId: uploadResult.filename, // The identifier for the file
+          };
         })
       );
     }
@@ -154,6 +91,7 @@ const submitOpportunity = async (req, res) => {
       address,
       yearsOfExp,
       memo,
+      email,
       productsDealtWith,
       status: "Processing",
       documents: uploadedFiles, // Array of S3 URLs
@@ -187,8 +125,9 @@ const viewSingleOpportunity = async (req, res) => {
       _id: opportunityId,
       customerId: loggedInUserId,
     })
-      .populate("productId", "name description price")
+      .populate("productId", "basicDetails description images")
       .populate("ownerId", "name email")
+      .populate({ path: "customerId", select: "companyDetails email" })
       .exec();
 
     if (!opportunity) {
@@ -212,44 +151,6 @@ const viewSingleOpportunity = async (req, res) => {
     });
   }
 };
-
-//View-All SENT OPPURTUNITY
-// const viewAllOpportunity = async (req, res) => {
-//   try {
-//     const loggedInUserId = req.user.id;
-
-//     console.log(loggedInUserId);
-
-//     // Find all opportunities where the logged-in user is the sender
-//     const opportunities = await OpportunityModel.find({
-//       customerId: loggedInUserId,
-//     })
-//       .populate("productId", "name description price") // Adjust fields as needed
-//       .populate("ownerId", "name email") // Adjust fields as needed
-//       .exec();
-
-//     if (opportunities.length === 0) {
-//       return res.status(200).json({
-//         success: true,
-//         message: "No opportunities found.",
-//         data: [],
-//       });
-//     }
-
-//     // Return the opportunities
-//     res.status(200).json({
-//       success: true,
-//       data: opportunities,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching opportunities:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
 
 const viewAllOpportunity = async (req, res) => {
   try {

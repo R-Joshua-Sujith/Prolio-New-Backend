@@ -148,7 +148,7 @@ const viewSingleOpportunityOwner = async (req, res) => {
     const ownerId = req.user.id; // Replace with actual auth logic
 
     // Get opportunityId from params
-    const opportunityId = req.body; // Replace with req.params.opportunityId
+    const { opportunityId } = req.params;
 
     // Find the opportunity and populate necessary fields
     const opportunity = await OpportunityModel.findOne({
@@ -157,11 +157,11 @@ const viewSingleOpportunityOwner = async (req, res) => {
     })
       .populate({
         path: "customerId",
-        select: "name email phone profilePicture",
+        select: "name email mobileNumber companyDetails",
       })
       .populate({
         path: "productId",
-        select: "name description price",
+        select: "name basicDetails images",
       })
       .exec();
 
@@ -191,6 +191,9 @@ const viewSingleOpportunityOwner = async (req, res) => {
           createdAt: opportunity.createdAt,
           updatedAt: opportunity.updatedAt,
           ownerId: opportunity.ownerId, // Include ownerId in response for transparency
+          mobileNumber: opportunity.mobileNumber, // Include mobileNumber in response for transparency
+          productsDealtWith: opportunity.productsDealtWith, // Include productsDealtWith in response for transparency
+          documents: opportunity.documents, // Include documents in response for transparency
         },
       },
     });
