@@ -13,6 +13,11 @@ router.post(
   companyEnquiryController.replyToEnquiry
 );
 router.get(
+  "/myProduct-enquiry",
+  companyVerify,
+  companyEnquiryController.getMyProductEnquiries
+);
+router.get(
   "/messages/:enquiryId",
   companyVerify,
   companyEnquiryController.getEnquiryMessages

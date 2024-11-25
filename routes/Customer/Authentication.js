@@ -21,6 +21,7 @@ router.get(
   customerAuthenticationContoller.checkVerificationStatus
 );
 
+
 // Route to send OTP
 router.post("/send-otp", customerAuthenticationContoller.sendOTP);
 router.post("/verify-otp", customerAuthenticationContoller.verifyOTP);

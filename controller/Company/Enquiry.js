@@ -1,6 +1,7 @@
 const EnquiryModel = require("../../models/Enquiry");
 const CustomerModel = require("../../models/Customer");
 const { sendResponse, apiResponse } = require("../../utils/responseHandler");
+const ProductModel = require("../../models/Product");
 
 const enquiryController = {
   /**
@@ -27,12 +28,13 @@ const enquiryController = {
     try {
       const { enquiryId } = req.params;
       const { message } = req.body;
-      const companyUserId = req.user.id;
-
+      const companyUserId = req.user?.id;
       const enquiry = await EnquiryModel.findById(enquiryId);
       if (!enquiry) {
         return sendResponse(res, 404, false, "Enquiry not found");
       }
+
+      // Check if the user is the owner of the enquiry
       if (enquiry.ownerId.toString() !== companyUserId.toString()) {
         return sendResponse(
           res,
@@ -41,6 +43,8 @@ const enquiryController = {
           "Unauthorized to reply to this enquiry"
         );
       }
+
+      // Push the new message into the enquiry's messages array
       enquiry.messages.push({
         content: message,
         role: "company",
@@ -48,6 +52,12 @@ const enquiryController = {
         userModel: "Customer",
       });
 
+      // If it's the first reply, change the status to 'Connection Established'
+      if (enquiry.status === "Pending") {
+        enquiry.status = "Connection Established";
+      }
+
+      // Save the enquiry with the updated status and messages
       await enquiry.save();
 
       return sendResponse(res, 200, true, "Reply sent successfully", enquiry);
@@ -59,6 +69,75 @@ const enquiryController = {
         false,
         "Error sending reply",
         error.message
+      );
+    }
+  },
+
+  getMyProductEnquiries: async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const userProducts = await ProductModel.find({ ownerId: userId }).select(
+        "_id"
+      );
+
+      if (!userProducts || userProducts.length === 0) {
+        return sendResponse(
+          res,
+          404,
+          false,
+          null,
+          "No products found for the user."
+        );
+      }
+
+      // Extract the product IDs
+      const productIds = userProducts.map((product) => product._id);
+
+      // Query the enquiries related to the user's products
+      const enquiries = await EnquiryModel.find({
+        productId: { $in: productIds },
+      })
+        .populate({
+          path: "productId",
+          select: "basicDetails",
+        })
+        .populate("ownerId", "name")
+        .populate("customerId", "name")
+        .select("productId ownerId status messages createdAt");
+
+      // Format the response data
+      const formattedEnquiries = enquiries.map((enquiry) => ({
+        enquiryId: enquiry._id,
+        product: {
+          id: enquiry.productId?._id || null,
+          basicDetails: enquiry.productId?.basicDetails || null,
+        },
+        vendor: {
+          id: enquiry.customerId?._id || null,
+          name: enquiry.customerId?.name || null, // Vendor name
+        },
+        status: enquiry.status || "Unknown",
+        appliedDtae:
+          enquiry.messages?.[enquiry.messages.length - 1]?.createdAt || null,
+        createdAt: enquiry.createdAt,
+      }));
+
+      // Send the formatted data as a response
+      sendResponse(
+        res,
+        200,
+        true,
+        formattedEnquiries,
+        "Enquiries fetched successfully"
+      );
+    } catch (error) {
+      // Handle any errors
+      sendResponse(
+        res,
+        500,
+        false,
+        null,
+        error.message || "Internal Server Error"
       );
     }
   },
