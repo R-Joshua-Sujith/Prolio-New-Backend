@@ -7,6 +7,7 @@ const {
 } = require("./Helpers/Authentication");
 const jwt = require("jsonwebtoken");
 const { sendResponse } = require("../../utils/responseHandler");
+const { uploadToS3 } = require("../../utils/s3FileUploader");
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -286,3 +287,6 @@ exports.verifyOTP = async (req, res) => {
     return sendResponse(res, 500, false, error.message);
   }
 };
+
+
+
