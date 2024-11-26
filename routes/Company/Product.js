@@ -23,17 +23,11 @@ router.post(
   companyProductController.createProduct
 );
 
-router.get(
-  "/all-Products",
-  looseVerify,
-  companyProductController.getAllProducts
-);
-
-router.get(
-  "/comapny-products/:productId",
-  // looseVerify,
-  companyProductController.getCompanyProducts
-);
+// router.get(
+//   "/all-Products",
+//   looseVerify,
+//   companyProductController.getAllProducts
+// );
 
 router.get(
   "/get-product/:productId",
@@ -55,6 +49,12 @@ router.get(
   "/get-all-products",
   companyVerify,
   companyProductController.getAllCompanyProducts
+);
+
+router.get(
+  "/comapny-products/:productId",
+  // looseVerify,
+  companyProductController.getCompanyProducts
 );
 
 module.exports = router;
