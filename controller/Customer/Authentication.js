@@ -127,7 +127,7 @@ exports.checkVerificationStatus = async (req, res) => {
         message: "Customer not found.",
       });
     }
-    console.log("Customer verification status:", customer.status);
+    // console.log("Customer verification status:", customer.status);
     return res.status(200).json({
       success: true,
       status: customer.status,
@@ -207,7 +207,7 @@ const generateOTP = () => {
 
 // Controller: Send OTP
 exports.sendOTP = async (req, res) => {
-  console.log("hi")
+  console.log("hi");
   try {
     const { email } = req.body;
     if (!email) {
@@ -287,6 +287,3 @@ exports.verifyOTP = async (req, res) => {
     return sendResponse(res, 500, false, error.message);
   }
 };
-
-
-

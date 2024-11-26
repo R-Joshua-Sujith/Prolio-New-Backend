@@ -115,119 +115,6 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-// Controller function to fetch all products
-const getAllProducts = async (req, res) => {
-  try {
-    const { searchTerm = "", page = 1, limit = 10, categoryId } = req.query;
-
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    const skip = (pageNum - 1) * limitNum;
-    let query = {};
-
-    // Base search query
-    if (searchTerm) {
-      query.$or = [
-        { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
-        { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
-      ];
-    }
-
-    if (categoryId) {
-      query["category.categoryId"] = mongoose.Types.ObjectId(categoryId);
-    }
-
-    // 1. Get all categories with their subcategories
-    const categories = await CategoryModel.find(
-      { isActive: true },
-      "categoryName subCategories"
-    );
-
-    // 2. If categoryId is provided, get related subcategories
-    let relatedSubcategories = [];
-    if (categoryId) {
-      const selectedCategory = categories.find(
-        (cat) => cat._id.toString() === categoryId
-      );
-      relatedSubcategories = selectedCategory
-        ? selectedCategory.subCategories
-        : [];
-    }
-
-    const products = await ProductModel.find(query).skip(skip).limit(limitNum);
-
-    const totalProducts = await ProductModel.countDocuments(query);
-
-    // Transform categories for response
-    const transformedCategories = categories.map((cat) => ({
-      id: cat._id,
-      name: cat.categoryName,
-      subCategories: cat.subCategories.map((sub) => ({
-        id: sub._id,
-        name: sub.name,
-      })),
-    }));
-
-    // Transform products data
-    const transformedProducts = await Promise.all(
-      products.map(async (product) => {
-        const customer = await CustomerModel.findOne(
-          { _id: product.ownerId },
-          "companyDetails.companyInfo.companyName"
-        );
-
-        // Get category and subcategory details
-        const category = categories.find(
-          (cat) =>
-            cat._id.toString() === product.category.categoryId?.toString()
-        );
-        const subcategory = category?.subCategories.find(
-          (sub) =>
-            sub._id.toString() === product.category.subCategoryId?.toString()
-        );
-
-        return {
-          id: product._id,
-          userId: product.ownerId,
-          companyId: product.companyId?._id || null,
-          productName: product.basicDetails.name || "Unknown Product",
-          slug: product.basicDetails.slug,
-          brandName:
-            customer?.companyDetails?.companyInfo?.companyName ||
-            "Unknown Company",
-          price: product.basicDetails.price || "Price not available",
-          productImage: product.images[0]?.url || "No Image Available",
-          secondaryProductImage: product.images[1]?.url || "No Secondary Image",
-          category: category?.categoryName || "Unknown Category",
-          subcategory: subcategory?.name || "Unknown Subcategory",
-        };
-      })
-    );
-
-    const totalPages = Math.ceil(totalProducts / limitNum);
-
-    return res.status(200).json({
-      success: true,
-      message: "Products fetched successfully",
-      data: {
-        products: transformedProducts,
-        totalItems: totalProducts,
-        totalPages,
-        currentPage: pageNum,
-        categories: transformedCategories,
-        relatedSubcategories: categoryId ? relatedSubcategories : [],
-      },
-    });
-  } catch (error) {
-    console.error("Error in getFilteredProducts:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
-
 const checkProductIdUnique = async (req, res) => {
   console.log(req.query);
   try {
@@ -404,7 +291,7 @@ const getProductById = async (req, res) => {
 
 const getCompanyProducts = async (req, res) => {
   try {
-    const { productId } = req.params;
+    const { ownerId } = req.params;
     const {
       page = 1,
       limit = 10,
@@ -413,17 +300,9 @@ const getCompanyProducts = async (req, res) => {
       subCategoryId,
     } = req.query;
 
-    if (!productId) {
-      return sendResponse(res, 400, "Product ID is required");
+    if (!ownerId) {
+      return sendResponse(res, 400, "Owner ID is required");
     }
-
-    // Verify product existence
-    const product = await ProductModel.findById(productId).exec();
-    if (!product) {
-      return sendResponse(res, 404, "Product not found");
-    }
-
-    const ownerId = product.ownerId;
 
     // Verify owner existence
     const customer = await CustomerModel.findById(ownerId).exec();
@@ -431,7 +310,7 @@ const getCompanyProducts = async (req, res) => {
       return sendResponse(res, 404, "Customer not found");
     }
 
-    // Build query
+    // Build query to fetch products for the given ownerId
     const query = { ownerId };
 
     if (search) {
@@ -488,7 +367,7 @@ const getCompanyProducts = async (req, res) => {
       subCategoryId: prod.category.subCategoryId,
     }));
 
-    // Send response
+    // Send response with products and categories
     return sendResponse(
       res,
       200,
@@ -512,11 +391,11 @@ const getCompanyProducts = async (req, res) => {
     });
   }
 };
+
 module.exports = {
   test,
   createProduct,
   deleteProduct,
-  getAllProducts,
   checkSlugUnique,
   checkProductIdUnique,
   getAllCompanyProducts,

@@ -17,6 +17,7 @@ const upload = multer({
 router.patch(
   "/update-profile",
   upload.single("profileImage"),
+  customerVerify,
   profileContoller.updateCustomerProfile
 );
 
@@ -25,5 +26,7 @@ router.get(
   looseVerify,
   profileContoller.getCustomerDetails
 );
+
+router.get("/profile", customerVerify, profileContoller.getCustomerProfile);
 
 module.exports = router;

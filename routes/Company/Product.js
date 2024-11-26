@@ -23,14 +23,14 @@ router.post(
   companyProductController.createProduct
 );
 
-router.get(
-  "/all-Products",
-  looseVerify,
-  companyProductController.getAllProducts
-);
+// router.get(
+//   "/all-Products",
+//   looseVerify,
+//   companyProductController.getAllProducts
+// );
 
 router.get(
-  "/comapny-products/:productId",
+  "/comapny-products/:ownerId",
   // looseVerify,
   companyProductController.getCompanyProducts
 );
