@@ -2,10 +2,7 @@ const express = require("express");
 const router = express.Router();
 const companyOpportunityController = require("../../controller/Company/Opportunity");
 const companyProductController = require("../../controller/Company/Product");
-const {
-  companyVerify,
-  looseVerify,
-} = require("../../controller/Company/Middleware/auth");
+const { companyVerify } = require("../../controller/Company/Middleware/auth");
 const multer = require("multer");
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -23,11 +20,11 @@ router.post(
   companyProductController.createProduct
 );
 
-// router.get(
-//   "/all-Products",
-//   looseVerify,
-//   companyProductController.getAllProducts
-// );
+router.get(
+  "/comapny-products/:ownerId",
+  // looseVerify,
+  companyProductController.getCompanyProducts
+);
 
 router.get(
   "/get-product/:productId",

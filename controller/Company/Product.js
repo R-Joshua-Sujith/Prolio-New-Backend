@@ -293,7 +293,7 @@ const getProductById = async (req, res) => {
 
 const getCompanyProducts = async (req, res) => {
   try {
-    const { productId } = req.params;
+    const { ownerId } = req.params;
     const {
       page = 1,
       limit = 10,
@@ -302,17 +302,9 @@ const getCompanyProducts = async (req, res) => {
       subCategoryId,
     } = req.query;
 
-    if (!productId) {
-      return sendResponse(res, 400, "Product ID is required");
+    if (!ownerId) {
+      return sendResponse(res, 400, "Owner ID is required");
     }
-
-    // Verify product existence
-    const product = await ProductModel.findById(productId).exec();
-    if (!product) {
-      return sendResponse(res, 404, "Product not found");
-    }
-
-    const ownerId = product.ownerId;
 
     // Verify owner existence
     const customer = await CustomerModel.findById(ownerId).exec();
@@ -320,7 +312,7 @@ const getCompanyProducts = async (req, res) => {
       return sendResponse(res, 404, "Customer not found");
     }
 
-    // Build query
+    // Build query to fetch products for the given ownerId
     const query = { ownerId };
 
     if (search) {
@@ -377,7 +369,7 @@ const getCompanyProducts = async (req, res) => {
       subCategoryId: prod.category.subCategoryId,
     }));
 
-    // Send response
+    // Send response with products and categories
     return sendResponse(
       res,
       200,
