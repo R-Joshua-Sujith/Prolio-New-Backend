@@ -3,6 +3,7 @@ const CustomerModel = require("../../models/Customer");
 const Product = require("../../models/Product");
 const mongoose = require("mongoose");
 const { uploadToS3 } = require("../../utils/s3FileUploader");
+const { ObjectId } = mongoose.Types;
 
 // CREATE OPPURTUNITY
 const submitOpportunity = async (req, res) => {
@@ -205,8 +206,64 @@ const viewAllOpportunity = async (req, res) => {
   }
 };
 
+const checkApplicationStatus = async (req, res) => {
+  try {
+    const { productId } = req.query;
+    const customerId = req.user._id; // Get from auth middleware
+
+    // First check if the user is the product owner
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        error: "Product not found"
+      });
+    }
+
+    // Check if current user is the product owner
+    const isOwner = product.ownerId.toString() === customerId.toString();
+    if (isOwner) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          isOwner: true
+        }
+      });
+    }
+
+    // If not owner, check for existing applications
+    const applications = await OpportunityModel.find({
+      productId,
+      customerId
+    }).lean();
+
+    // Create status map for each role
+    const statusMap = applications.reduce((acc, app) => {
+      acc[app.opportunity_role] = app.status;
+      return acc;
+    }, {});
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        isOwner: false,
+        applications: statusMap
+      }
+    });
+
+  } catch (error) {
+    console.error("Error in checkApplicationStatus:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   submitOpportunity,
   viewSingleOpportunity,
   viewAllOpportunity,
+  checkApplicationStatus,
 };

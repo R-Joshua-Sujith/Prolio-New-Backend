@@ -130,6 +130,9 @@ exports.getAllProducts = async (req, res) => {
         // Transform product data
         const primaryImage = product.images[0]?.url || "No Image Available";
         const secondaryImage = product.images[1]?.url || "No Secondary Image";
+        const thirdImage = product.images[2]?.url || "No Third Image";
+        const fourthImage = product.images[3]?.url || "No Fourth Image";
+
         const price = product.basicDetails.price || "Price not available";
 
         return {
@@ -142,6 +145,8 @@ exports.getAllProducts = async (req, res) => {
           price,
           productImage: primaryImage,
           secondaryProductImage: secondaryImage,
+          thirdProductImage: thirdImage,
+          fourthProductImage: fourthImage,
           category: categoryName,
           subcategory: subcategoryName,
         };

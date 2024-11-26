@@ -57,4 +57,10 @@ router.get(
   companyProductController.getAllCompanyProducts
 );
 
+router.get(
+  "/comapny-products/:productId",
+  // looseVerify,
+  companyProductController.getCompanyProducts
+);
+
 module.exports = router;

@@ -117,6 +117,7 @@ const deleteProduct = async (req, res) => {
 
 const checkProductIdUnique = async (req, res) => {
   console.log(req.query);
+  console.log(req.query);
   try {
     const { id } = req.query;
 
@@ -284,6 +285,7 @@ const getProductById = async (req, res) => {
     }
 
     sendResponse(res, 500, false, "Error fetching product", {
+      details: error.message,
       details: error.message,
     });
   }
