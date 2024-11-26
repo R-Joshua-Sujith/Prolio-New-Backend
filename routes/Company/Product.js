@@ -23,13 +23,17 @@ router.post(
   companyProductController.createProduct
 );
 
-router.get(
-  "/all-Products",
-  looseVerify,
-  companyProductController.getAllProducts
-);
+// router.get(
+//   "/all-Products",
+//   looseVerify,
+//   companyProductController.getAllProducts
+// );
 
-router.get("/get-product/:productId", companyVerify, companyProductController.getProductById)
+router.get(
+  "/get-product/:productId",
+  companyVerify,
+  companyProductController.getProductById
+);
 
 router.delete(
   "/delete-product/:id",
@@ -37,12 +41,20 @@ router.delete(
   companyProductController.deleteProduct
 );
 
-
 router.get("/check-unique-slug", companyProductController.checkSlugUnique);
 
 router.get("/check-unique-id", companyProductController.checkProductIdUnique);
 
+router.get(
+  "/get-all-products",
+  companyVerify,
+  companyProductController.getAllCompanyProducts
+);
 
-router.get("/get-all-products", companyVerify, companyProductController.getAllCompanyProducts);
+router.get(
+  "/comapny-products/:productId",
+  // looseVerify,
+  companyProductController.getCompanyProducts
+);
 
 module.exports = router;

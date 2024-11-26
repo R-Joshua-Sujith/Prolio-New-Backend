@@ -10,4 +10,6 @@ router.get("/test-verify", customerVerify, customerProductController.test);
 router.get("/get-single-product/:slug", customerProductController.getProduct);
 
 
+router.get("/all-Products", customerProductController.getAllProducts);
+
 module.exports = router;

@@ -2,7 +2,8 @@ const ProductModel = require("../../models/Product");
 const CustomerModel = require("../../models/Customer");
 const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
-const { default: mongoose } = require("mongoose");
+const CategoryModel = require("../../models/Category");
+const mongoose = require("mongoose");
 
 /**
  *  Function to check the API is working
@@ -114,96 +115,8 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-// Controller function to fetch all products
-const getAllProducts = async (req, res) => {
-  try {
-    const {
-      searchTerm = "",
-      page = 1,
-      limit = 10,
-      category,
-      subcategory,
-    } = req.query;
-
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    const skip = (pageNum - 1) * limitNum;
-    let query = {};
-
-    if (searchTerm) {
-      query.$or = [
-        { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
-        { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
-      ];
-    }
-
-    if (category) {
-      query["category.categoryId"] = category;
-    }
-    if (subcategory) {
-      query["category.subCategoryId"] = subcategory;
-    }
-
-    const products = await ProductModel.find(query)
-      .populate("category.categoryId", "name")
-      .skip(skip)
-      .limit(limitNum);
-
-    const totalProducts = await ProductModel.countDocuments(query);
-    const categories = await ProductModel.distinct("category.categoryId");
-    const subcategories = await ProductModel.distinct("category.subCategoryId");
-
-    const transformedData = products.map((product) => {
-      const primaryImage = product.images[0]?.url || "No Image Available";
-      const secondaryImage = product.images[1]?.url || "No Secondary Image";
-      const thirdImage = product.images[2]?.url || "No thirdImage Image";
-      const fourthImage = product.images[3]?.url || "No fourthImage Image";
-
-      const price = product.basicDetails.price || "Price not available";
-
-      return {
-        id: product._id,
-        userId: product.ownerId,
-        companyId: product.companyId?._id || null,
-        productName: product.basicDetails.name || "Unknown Product",
-        slug: product.basicDetails.slug,
-        brandName: product.companyId?.companyName || "Unknown Company",
-        price,
-        productImage: primaryImage,
-        secondaryProductImage: secondaryImage,
-        thirdProductImage: thirdImage,
-        fourthProductImage: fourthImage,
-        category: product.category.categoryId?.name || "Unknown Category",
-        subcategory: product.category.subCategoryId || "Unknown Subcategory",
-      };
-    });
-
-    const totalPages = Math.ceil(totalProducts / limitNum);
-
-    res.status(200).json({
-      products: transformedData,
-      totalItems: totalProducts,
-      totalPages,
-      currentPage: pageNum,
-      categories,
-      subcategories,
-    });
-  } catch (error) {
-    console.error("Error fetching product details:", error.message);
-
-    if (error instanceof mongoose.Error) {
-      return res
-        .status(400)
-        .json({ error: "Database Error", details: error.message });
-    }
-
-    res
-      .status(500)
-      .json({ error: "Internal Server Error", details: error.message });
-  }
-};
-
 const checkProductIdUnique = async (req, res) => {
+  console.log(req.query);
   console.log(req.query);
   try {
     const { id } = req.query;
@@ -373,6 +286,118 @@ const getProductById = async (req, res) => {
 
     sendResponse(res, 500, false, "Error fetching product", {
       details: error.message,
+      details: error.message,
+    });
+  }
+};
+
+const getCompanyProducts = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      categoryId,
+      subCategoryId,
+    } = req.query;
+
+    if (!productId) {
+      return sendResponse(res, 400, "Product ID is required");
+    }
+
+    // Verify product existence
+    const product = await ProductModel.findById(productId).exec();
+    if (!product) {
+      return sendResponse(res, 404, "Product not found");
+    }
+
+    const ownerId = product.ownerId;
+
+    // Verify owner existence
+    const customer = await CustomerModel.findById(ownerId).exec();
+    if (!customer) {
+      return sendResponse(res, 404, "Customer not found");
+    }
+
+    // Build query
+    const query = { ownerId };
+
+    if (search) {
+      query.$or = [
+        { "basicDetails.name": { $regex: search, $options: "i" } },
+        { "basicDetails.description": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    if (categoryId) {
+      query["category.categoryId"] = mongoose.Types.ObjectId(categoryId);
+    }
+
+    if (subCategoryId) {
+      query["category.subCategoryId"] = mongoose.Types.ObjectId(subCategoryId);
+    }
+
+    // Pagination
+    const skip = (page - 1) * limit;
+
+    // Fetch products
+    const products = await ProductModel.find(query)
+      .skip(skip)
+      .limit(Number(limit))
+      .exec();
+
+    const totalProducts = await ProductModel.countDocuments(query);
+
+    // Fetch categories
+    const categories = await CategoryModel.find({ isActive: true }).exec();
+    const transformedCategories = categories.map((category) => ({
+      id: category._id,
+      name: category.categoryName,
+      subcategories: category.subCategories
+        .filter((sub) => sub.isActive)
+        .map((sub) => ({
+          id: sub._id,
+          name: sub.name,
+        })),
+    }));
+
+    // Transform products
+    const transformedProducts = products.map((prod) => ({
+      id: prod._id,
+      name: prod.basicDetails.name || "Unknown Product",
+      description: prod.basicDetails.description || "No Description",
+      price: prod.basicDetails.price || "N/A",
+      slug: prod.basicDetails.slug,
+      primaryImage: prod.images[0]?.url || "/no-image.png",
+      secondaryImage: prod.images[1]?.url || "/no-image.png",
+      thirdImage: prod.images[2]?.url || "/no-image.png",
+      fourthImage: prod.images[3]?.url || "/no-image.png",
+      categoryId: prod.category.categoryId,
+      subCategoryId: prod.category.subCategoryId,
+    }));
+
+    // Send response
+    return sendResponse(
+      res,
+      200,
+      "Products and categories fetched successfully",
+      {
+        customer: { ...customer._doc },
+        products: transformedProducts,
+        categories: transformedCategories,
+        pagination: {
+          total: totalProducts,
+          page: Number(page),
+          limit: Number(limit),
+          totalPages: Math.ceil(totalProducts / limit),
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Error fetching products and categories:", error.message);
+    return sendResponse(res, 500, "Internal Server Error", {
+      details: error.message,
     });
   }
 };
@@ -381,9 +406,9 @@ module.exports = {
   test,
   createProduct,
   deleteProduct,
-  getAllProducts,
   checkSlugUnique,
   checkProductIdUnique,
   getAllCompanyProducts,
   getProductById,
+  getCompanyProducts,
 };
