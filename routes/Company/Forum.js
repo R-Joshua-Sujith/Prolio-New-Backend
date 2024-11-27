@@ -54,5 +54,6 @@ router.get("/get-forum/:forumId", looseVerify, forumController.getForumById);
 
 // Route to delete a forum
 router.delete("/delete/:forumId", forumController.deleteForum);
+router.get("/check-forum-owner/:forumId", forumController.checkForumOwnership);
 
 module.exports = router;

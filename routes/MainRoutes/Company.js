@@ -4,9 +4,11 @@ const companyOpportunityRoutes = require("../Company/Opportunity");
 const companyProductRoutes = require("../Company/Product");
 const companyCategoryRoutes = require("../Company/Category");
 const companyForumRoutes = require("../Company/Forum");
+const companyMessageRoutes = require("../Company/Message");
 
 router.use("/enquiry", companyEnquiryRoutes);
 router.use("/forum", companyForumRoutes);
+router.use("/message", companyMessageRoutes);
 router.use("/opportunity", companyOpportunityRoutes);
 router.use("/product", companyProductRoutes);
 router.use("/category", companyCategoryRoutes);
