@@ -19,7 +19,7 @@ router.get(
 
 // Remove a product from wishlist
 router.delete(
-  "/:customerId/products/:productId",
+  "/remove-from-wishlist/:productId",
   customerVerify,
   WishListController.removeWishlistItem
 );
