@@ -43,8 +43,8 @@ router.get(
 // Route to get own forums
 router.get("/own-forums", companyVerify, forumController.getOwnForums);
 
-// Route to get all active forums
-router.get("/all-forums", forumController.getAllForums);
+// Route to get all active forums excluding ownner's Forum
+router.get("/all-forums", looseVerify, forumController.getAllForums);
 
 // Route to get forums where the user is a creator or a member
 router.get("/get-forums", looseVerify, forumController.getForums);
@@ -54,5 +54,27 @@ router.get("/get-forum/:forumId", looseVerify, forumController.getForumById);
 
 // Route to delete a forum
 router.delete("/delete/:forumId", forumController.deleteForum);
+
+// Route to send a join request to a forum
+
+router.post(
+  "/join-forum/:forumId",
+  looseVerify,
+  forumController.sendJoinRequest
+);
+
+// Accept the Request
+router.post(
+  "/accept-request/:forumId/:userId",
+  companyVerify,
+  forumController.acceptJoinRequest
+);
+
+// GET endpoint for received forum requests
+router.get(
+  "/received-requests",
+  companyVerify,
+  forumController.getReceivedRequestsForOwner
+);
 
 module.exports = router;
