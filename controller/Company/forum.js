@@ -1,11 +1,8 @@
 const mongoose = require("mongoose");
-
 const socketIo = require("socket.io");
-
 const ForumModel = require("../../models/Forum");
 const ProductModel = require("../../models/Product");
-
-const { uploadToS3 } = require("../../utils/s3FileUploader");
+const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 
 exports.createForum = async (req, res) => {
@@ -229,7 +226,6 @@ exports.getOwnForums = async (req, res) => {
   }
 };
 
-
 exports.getAllForums = async (req, res) => {
   try {
     // Fetch all active forums and populate customer details for owner and members
@@ -259,8 +255,10 @@ exports.getAllForums = async (req, res) => {
   }
 };
 
-
-exports.getUserForums = async (req, res) => {
+/**
+ * Get forums created by the user or where the user is a member.
+ */
+exports.getForums = async (req, res) => {
   try {
     const ownerId = req.user?.id;
     console.log("Decoded user from token:", ownerId);
@@ -317,5 +315,64 @@ exports.getForumById = async (req, res) => {
   } catch (error) {
     console.error("Error retrieving forum:", error);
     sendResponse(res, 500, "Error retrieving forum", { error: error.message });
+  }
+};
+
+exports.getForumById = async (req, res) => {
+  try {
+    const { forumId } = req.params;
+
+    if (!forumId) {
+      return sendResponse(res, 400, false, "Forum ID is required");
+    }
+
+    console.log("Fetching forum with ID:", forumId);
+
+    // Query the database to find the specific forum by ID
+    const forum = await ForumModel.findById(forumId).populate({
+      path: "members",
+      select: "name",
+    });
+
+    if (!forum) {
+      return sendResponse(res, 404, false, "Forum not found");
+    }
+
+    // Respond with the forum details
+    sendResponse(res, 200, true, "Forum retrieved successfully", forum);
+  } catch (error) {
+    console.error("Error retrieving forum:", error);
+    sendResponse(res, 500, false, "Error retrieving forum", error.message);
+  }
+};
+
+exports.deleteForum = async (req, res) => {
+  const { forumId } = req.params;
+
+  try {
+    // Validate the forum ID
+    if (!forumId || !mongoose.Types.ObjectId.isValid(forumId)) {
+      return sendResponse(res, 400, "Invalid forum ID");
+    }
+
+    // Find the forum by ID
+    const forum = await ForumModel.findById(forumId);
+    if (!forum) {
+      return sendResponse(res, 404, "Forum not found");
+    }
+
+    // Delete the associated image from S3 if it exists
+    if (forum.forumImage) {
+      await deleteFromS3(forum.forumImage);
+    }
+
+    // Delete the forum from the database
+    await ForumModel.findByIdAndDelete(forumId);
+
+    console.log(`Forum with ID ${forumId} deleted successfully.`);
+    sendResponse(res, 200, "Forum deleted successfully");
+  } catch (error) {
+    console.error("Error deleting forum:", error);
+    sendResponse(res, 500, "Error deleting forum", { error: error.message });
   }
 };

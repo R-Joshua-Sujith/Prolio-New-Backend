@@ -68,33 +68,6 @@ exports.updateCustomerProfile = async (req, res) => {
   }
 };
 
-exports.getCustomerDetails = async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    // const userId = req.user.id;
-    const user = await Customer.findById(userId, "email name status profile");
-    if (!user) {
-      return sendResponse(res, 404, false, "Customer not found");
-    }
-    return sendResponse(
-      res,
-      200,
-      true,
-      "Customer details retrieved successfully",
-      { customer: user }
-    );
-  } catch (error) {
-    console.error("Error fetching customer details:", error);
-    return sendResponse(
-      res,
-      500,
-      false,
-      "Failed to fetch customer details",
-      error.message
-    );
-  }
-};
-
 exports.getCustomerProfile = async (req, res) => {
   try {
     const userId = req.user?.id;

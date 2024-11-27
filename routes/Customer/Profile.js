@@ -22,11 +22,9 @@ router.patch(
 );
 
 router.get(
-  "/customer-details",
-  looseVerify,
-  profileContoller.getCustomerDetails
+  "/customer-profile",
+  customerVerify,
+  profileContoller.getCustomerProfile
 );
-
-router.get("/profile", customerVerify, profileContoller.getCustomerProfile);
 
 module.exports = router;
