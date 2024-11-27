@@ -229,13 +229,18 @@ exports.getOwnForums = async (req, res) => {
   }
 };
 
+
 exports.getAllForums = async (req, res) => {
   try {
-    // Fetch all active forums and populate customer details
+    // Fetch all active forums and populate customer details for owner and members
     const forums = await ForumModel.find({ isActive: true })
       .populate({
-        path: "customerId",
-        select: "companyDetails",
+        path: "ownerId", // Populate the ownerId field
+        select: "companyDetails", // Assuming the Customer model has companyDetails
+      })
+      .populate({
+        path: "members", // Populate the members field
+        select: "name", // Select relevant fields for members
       })
       .lean()
       .exec();
@@ -253,6 +258,7 @@ exports.getAllForums = async (req, res) => {
     sendResponse(res, 500, "Error fetching forums", { error: error.message });
   }
 };
+
 
 exports.getUserForums = async (req, res) => {
   try {
