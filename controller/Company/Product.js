@@ -241,7 +241,6 @@ const getAllCompanyProducts = async (req, res) => {
     });
   }
 };
-
 const getProductById = async (req, res) => {
   console.log("hi");
   try {
