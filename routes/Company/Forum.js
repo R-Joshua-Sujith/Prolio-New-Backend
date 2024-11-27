@@ -56,6 +56,7 @@ router.get("/get-forum/:forumId", looseVerify, forumController.getForumById);
 router.delete("/delete/:forumId", forumController.deleteForum);
 
 // Route to send a join request to a forum
+
 router.post(
   "/join-forum/:forumId",
   looseVerify,
