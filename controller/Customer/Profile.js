@@ -1,25 +1,30 @@
 const Customer = require("../../models/Customer"); // Adjust the path
 const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
+const bcrypt = require("bcryptjs");
 
 /**
  * Update Customer Profile
  */
 exports.updateCustomerProfile = async (req, res) => {
-  const customerId = req.user?.id;
-  //   const customerId = req.user?.id;
+  const customerId = req.user?.id; // Assuming JWT middleware attaches user info
   const updates = req.body;
   const file = req.file;
+
   try {
+    // Fetch the customer by ID
     const customer = await Customer.findById(customerId);
     if (!customer) {
       return sendResponse(res, 404, false, null, "Customer not found.");
     }
+
+    // Handle profile image update
     if (file) {
+      // Delete old profile image if exists
       if (customer.profile?.url) {
         await deleteFromS3(customer.profile.url);
       }
-      // Upload the new image to S3
+      // Upload the new profile image to S3
       const uploadedImage = await uploadToS3(
         file.buffer,
         file.originalname,
@@ -31,15 +36,25 @@ exports.updateCustomerProfile = async (req, res) => {
         publicId: uploadedImage.filename,
       };
     }
-    // Update only the provided fields
-    for (const key in updates) {
-      if (updates[key] !== undefined) {
-        customer[key] = updates[key];
-      }
+
+    // Update password if provided
+    if (updates.password) {
+      const salt = await bcrypt.genSalt(10);
+      updates.password = await bcrypt.hash(updates.password, salt);
     }
+
+    // Update only allowed fields
+    const allowedFields = ["name", "email", "phone", "profile", "password"];
+    allowedFields.forEach((field) => {
+      if (updates[field] !== undefined) {
+        customer[field] = updates[field];
+      }
+    });
+
     // Save the updated customer document
     await customer.save();
 
+    // Return the updated customer
     return sendResponse(
       res,
       200,
