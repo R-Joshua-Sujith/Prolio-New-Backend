@@ -8,6 +8,7 @@ const customerBannerRoutes = require("../Customer/Banner");
 const customerProfileRoutes = require("../Customer/Profile");
 const customerWishListRoutes = require("../Customer/WishList");
 
+
 router.use("/auth", customerAuthRoutes);
 router.use("/profile", customerProfileRoutes);
 router.use("/company", customerCompanyRoutes);
