@@ -54,10 +54,11 @@ router.get("/get-forum/:forumId", looseVerify, forumController.getForumById);
 
 // Route to delete a forum
 router.delete("/delete/:forumId", forumController.deleteForum);
+
+
 router.get("/check-forum-owner/:forumId", forumController.checkForumOwnership);
 
 // Route to send a join request to a forum
-
 router.post(
   "/join-forum/:forumId",
   looseVerify,
