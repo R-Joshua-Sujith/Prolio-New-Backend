@@ -79,3 +79,32 @@ exports.getCustomerDetails = async (req, res) => {
     );
   }
 };
+
+exports.getCustomerProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    // Exclude password field when fetching profile
+    const customer = await Customer.findById(userId).select("-password");
+
+    if (!customer) {
+      return sendResponse(res, 404, false, null, "Customer not found");
+    }
+
+    sendResponse(
+      res,
+      200,
+      true,
+      customer,
+      "Customer profile fetched successfully"
+    );
+  } catch (error) {
+    sendResponse(
+      res,
+      500,
+      false,
+      null,
+      "An error occurred while fetching customer profile"
+    );
+  }
+};

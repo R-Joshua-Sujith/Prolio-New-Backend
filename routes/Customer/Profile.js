@@ -26,4 +26,6 @@ router.get(
   profileContoller.getCustomerDetails
 );
 
+router.get("/profile", customerVerify, profileContoller.getCustomerProfile);
+
 module.exports = router;

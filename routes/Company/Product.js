@@ -52,7 +52,7 @@ router.get(
 );
 
 router.get(
-  "/comapny-products/:productId",
+  "/comapny-products/:ownerId",
   // looseVerify,
   companyProductController.getCompanyProducts
 );
