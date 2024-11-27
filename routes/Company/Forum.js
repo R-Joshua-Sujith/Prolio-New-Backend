@@ -8,7 +8,7 @@ const {
 } = require("../../controller/Company/Middleware/auth");
 const OpportunityModel = require("../../models/Opportunity");
 const router = express.Router();
-const forumController = require("../../controller/Company/Forum");
+const forumController = require("../../controller/Company/forum");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -40,9 +40,6 @@ router.get(
   forumController.checkForumOwnership
 );
 
-// Route to delete a forum
-router.delete("/delete/:forumId", companyVerify, forumController.deleteForum);
-
 // Route to get own forums
 router.get("/own-forums", companyVerify, forumController.getOwnForums);
 
@@ -50,9 +47,11 @@ router.get("/own-forums", companyVerify, forumController.getOwnForums);
 router.get("/all-forums", forumController.getAllForums);
 
 // Route to get forums where the user is a creator or a member
-router.get("/get-forums", companyVerify, forumController.getUserForums);
+router.get("/get-forums", looseVerify, forumController.getForums);
 
 // Route to get a single forum by ID
-router.get("/get-forum/:forumId", forumController.getForumById);
+router.get("/get-forum/:forumId", looseVerify, forumController.getForumById);
+
+// Route to delete a forum
 
 module.exports = router;
