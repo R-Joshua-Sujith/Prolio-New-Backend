@@ -1,11 +1,8 @@
 const mongoose = require("mongoose");
-
 const socketIo = require("socket.io");
-
 const ForumModel = require("../../models/Forum");
 const ProductModel = require("../../models/Product");
-
-const { uploadToS3 } = require("../../utils/s3FileUploader");
+const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 
 exports.createForum = async (req, res) => {
@@ -269,7 +266,10 @@ exports.getAllForums = async (req, res) => {
   }
 };
 
-exports.getUserForums = async (req, res) => {
+/**
+ * Get forums created by the user or where the user is a member.
+ */
+exports.getForums = async (req, res) => {
   try {
     const ownerId = req.user?.id;
     console.log("Decoded user from token:", ownerId);
@@ -329,176 +329,61 @@ exports.getForumById = async (req, res) => {
   }
 };
 
-/**
- * Sends a join request to a forum.
- * @param {Object} req - Express request object.
- * @param {Object} res - Express response object.
- */
+exports.getForumById = async (req, res) => {
+  try {
+    const { forumId } = req.params;
 
-exports.sendJoinRequest = async (req, res) => {
+    if (!forumId) {
+      return sendResponse(res, 400, false, "Forum ID is required");
+    }
+
+    console.log("Fetching forum with ID:", forumId);
+
+    // Query the database to find the specific forum by ID
+    const forum = await ForumModel.findById(forumId).populate({
+      path: "members",
+      select: "name",
+    });
+
+    if (!forum) {
+      return sendResponse(res, 404, false, "Forum not found");
+    }
+
+    // Respond with the forum details
+    sendResponse(res, 200, true, "Forum retrieved successfully", forum);
+  } catch (error) {
+    console.error("Error retrieving forum:", error);
+    sendResponse(res, 500, false, "Error retrieving forum", error.message);
+  }
+};
+
+exports.deleteForum = async (req, res) => {
   const { forumId } = req.params;
-  const userId = req.user.id; // Assuming the user is added to req.user via authentication middleware.
 
   try {
+    // Validate the forum ID
+    if (!forumId || !mongoose.Types.ObjectId.isValid(forumId)) {
+      return sendResponse(res, 400, "Invalid forum ID");
+    }
+
     // Find the forum by ID
     const forum = await ForumModel.findById(forumId);
-
     if (!forum) {
-      return res.status(404).json({ message: "Forum not found." });
+      return sendResponse(res, 404, "Forum not found");
     }
 
-    if (!forum.isActive) {
-      return res.status(400).json({ message: "This forum is not active." });
+    // Delete the associated image from S3 if it exists
+    if (forum.forumImage) {
+      await deleteFromS3(forum.forumImage);
     }
 
-    // Check if the user is already a member
-    if (forum.members.includes(userId)) {
-      return res
-        .status(400)
-        .json({ message: "You are already a member of this forum." });
-    }
+    // Delete the forum from the database
+    await ForumModel.findByIdAndDelete(forumId);
 
-    // Check if the user has already sent a join request
-    if (forum.pendingRequests.includes(userId)) {
-      return res.status(400).json({
-        message: "You have already sent a join request to this forum.",
-      });
-    }
-
-    // Check if the user has been invited
-    if (forum.invitedUsers.includes(userId)) {
-      return res
-        .status(400)
-        .json({ message: "You have already been invited to this forum." });
-    }
-
-    // Add the user to the pending requests
-    forum.pendingRequests.push(userId);
-
-    // Save the forum document
-    await forum.save();
-
-    // Notify the forum owner (optional placeholder for notification logic)
-    // Example: sendNotification(forum.ownerId, `${req.user.name} wants to join your forum.`);
-
-    // Return the updated forum information, including the request status
-    const updatedForum = await ForumModel.findById(forumId).lean();
-
-    // Returning the updated forum data including the request status
-    return res.status(200).json({
-      message: "Join request sent successfully.",
-      updatedForum: {
-        ...updatedForum,
-        requestStatus: "pending", // Add request status explicitly
-      },
-    });
+    console.log(`Forum with ID ${forumId} deleted successfully.`);
+    sendResponse(res, 200, "Forum deleted successfully");
   } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ message: "An error occurred. Please try again later." });
-  }
-};
-
-/**
- * Accepts a join request and adds the user to the forum members list.
- * @param {Object} req - Express request object.
- * @param {Object} res - Express response object.
- */
-
-exports.acceptJoinRequest = async (req, res) => {
-  const { forumId, userId } = req.params; // Extract forumId and userId from route parameters.
-  const ownerId = req.user.id; // Assuming the authenticated owner is added to req.user.
-
-  try {
-    // Find the forum by ID
-    const forum = await ForumModel.findById(forumId);
-
-    if (!forum) {
-      return res.status(404).json({ message: "Forum not found." });
-    }
-
-    // Check if the logged-in user is the owner of the forum
-    if (forum.ownerId.toString() !== ownerId) {
-      return res
-        .status(403)
-        .json({ message: "You are not authorized to perform this action." });
-    }
-
-    // Check if the user is in the pending requests
-    if (!forum.pendingRequests.includes(userId)) {
-      return res
-        .status(400)
-        .json({ message: "The user has not requested to join this forum." });
-    }
-
-    // Add the user to the members list
-    forum.members.push(userId);
-
-    // Remove the user from the pending requests
-    forum.pendingRequests = forum.pendingRequests.filter(
-      (id) => id.toString() !== userId
-    );
-
-    // Save the forum document
-    await forum.save();
-
-    // Optionally, notify the user that their request has been approved
-    // Example: sendNotification(userId, `Your request to join the forum '${forum.forumName}' has been approved.`);
-
-    return res
-      .status(200)
-      .json({ message: "User has been added to the forum successfully." });
-  } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ message: "An error occurred. Please try again later." });
-  }
-};
-
-exports.getReceivedRequestsForOwner = async (req, res) => {
-  try {
-    const ownerId = req.user.id; // Authenticated owner's ID
-
-    // Find forums owned by the user
-    const ownedForums = await ForumModel.find({ ownerId })
-      .populate([
-        {
-          path: "pendingRequests",
-          select: "_id firstName lastName email",
-        },
-      ])
-      .select(
-        "forumName forumDescription forumImage objective pendingRequests"
-      );
-
-    // Check if the owner has any forums
-    if (!ownedForums.length) {
-      return res.status(404).json({
-        message: "No forums found for this owner",
-      });
-    }
-
-    // Format the response with forums and their pending requests
-    const formattedRequests = ownedForums.map((forum) => ({
-      forumId: forum._id,
-      forumName: forum.forumName,
-      forumDescription: forum.forumDescription,
-      forumImage: forum.forumImage,
-      objective: forum.objective,
-      pendingRequests: forum.pendingRequests,
-    }));
-
-    res.status(200).json({
-      message: "Received requests for owned forums fetched successfully",
-      forums: formattedRequests,
-    });
-  } catch (error) {
-    console.error("Error fetching received requests for owner:", error);
-    res.status(500).json({
-      message: "Failed to fetch received requests",
-      error: error.message,
-    });
+    console.error("Error deleting forum:", error);
+    sendResponse(res, 500, "Error deleting forum", { error: error.message });
   }
 };
