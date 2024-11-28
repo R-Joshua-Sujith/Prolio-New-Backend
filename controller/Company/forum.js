@@ -153,33 +153,6 @@ exports.leaveForum = async (req, res) => {
   }
 };
 
-exports.checkForumOwnership = async (req, res) => {
-  const { forumId } = req.params;
-  const userId = req.user?.userId; // Extract user ID from the middleware
-
-  try {
-    // Find the forum by its ID
-    const forum = await Forum.findById(forumId);
-
-    // Check if the forum exists
-    if (!forum) {
-      return res.status(404).json({ message: "Forum not found" });
-    }
-
-    // Check ownership
-    const isOwner = forum.userId.toString() === userId.toString();
-
-    // Respond with ownership status
-    res.status(200).json({ isOwner });
-  } catch (error) {
-    console.error("Error checking forum ownership:", error);
-    res.status(500).json({
-      message: "Error checking forum ownership",
-      error: error.message,
-    });
-  }
-};
-
 exports.deleteForum = async (req, res) => {
   const { forumId } = req.params;
   const userId = req.user?.userId;
@@ -631,6 +604,34 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
     console.error("Error fetching received requests for owner:", error);
     res.status(500).json({
       message: "Failed to fetch received requests and invited users",
+      error: error.message,
+    });
+  }
+};
+
+// Check if the logged-in user is the owner of the forum
+exports.checkForumOwnership = async (req, res) => {
+  const { forumId } = req.params;
+  const ownerId = req.user?.id;
+
+  try {
+    // Find the forum by its ID
+    const forum = await ForumModel.findById(forumId);
+
+    // Check if the forum exists
+    if (!forum) {
+      return res.status(404).json({ message: "Forum not found" });
+    }
+
+    // Check ownership
+    const isOwner = forum.ownerId.toString() === ownerId.toString();
+
+    // Respond with ownership status
+    res.status(200).json({ isOwner });
+  } catch (error) {
+    console.error("Error checking forum ownership:", error);
+    res.status(500).json({
+      message: "Error checking forum ownership",
       error: error.message,
     });
   }
