@@ -70,6 +70,12 @@ router.post(
   forumController.acceptJoinRequest
 );
 
+router.post(
+  "/reject-request/:forumId/:userId",
+  companyVerify, // Middleware to authenticate and authorize the user
+  forumController.rejectJoinRequest // Controller handling the rejection
+);
+
 // GET endpoint for received forum requests
 router.get(
   "/received-requests",
