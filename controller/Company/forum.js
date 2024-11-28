@@ -430,6 +430,53 @@ exports.acceptJoinRequest = async (req, res) => {
   }
 };
 
+exports.rejectJoinRequest = async (req, res) => {
+  const { forumId, userId } = req.params; // Extract forumId and userId from route parameters.
+  const ownerId = req.user.id; // Assuming the authenticated owner is added to req.user.
+
+  try {
+    // Find the forum by ID
+    const forum = await ForumModel.findById(forumId);
+
+    if (!forum) {
+      return res.status(404).json({ message: "Forum not found." });
+    }
+
+    // Check if the logged-in user is the owner of the forum
+    if (forum.ownerId.toString() !== ownerId) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to perform this action." });
+    }
+
+    // Check if the user is in the pending requests
+    if (!forum.pendingRequests.includes(userId)) {
+      return res
+        .status(400)
+        .json({ message: "The user has not requested to join this forum." });
+    }
+
+    // Remove the user from the pending requests
+    forum.pendingRequests = forum.pendingRequests.filter(
+      (id) => id.toString() !== userId
+    );
+
+    // Save the forum document
+    await forum.save();
+
+    // Optionally, notify the user that their request has been rejected
+    // Example: sendNotification(userId, `Your request to join the forum '${forum.forumName}' has been rejected.`);
+
+    return res.status(200).json({
+      message: "The user's request to join the forum has been rejected.",
+    });
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "An error occurred. Please try again later." });
+  }
+};
 
 /**
  * Get forums created by the user or where the user is a member.
@@ -464,6 +511,52 @@ exports.getForums = async (req, res) => {
   }
 };
 
+// exports.getReceivedRequestsForOwner = async (req, res) => {
+//   try {
+//     const ownerId = req.user.id; // Authenticated owner's ID
+
+//     // Find forums owned by the user
+//     const ownedForums = await ForumModel.find({ ownerId })
+//       .populate([
+//         {
+//           path: "pendingRequests",
+//           select: "_id name email companyDetails",
+//         },
+//       ])
+//       .select(
+//         "forumName forumDescription forumImage objective pendingRequests"
+//       );
+
+//     // Check if the owner has any forums
+//     if (!ownedForums.length) {
+//       return res.status(404).json({
+//         message: "No forums found for this owner",
+//       });
+//     }
+
+//     // Format the response with forums and their pending requests
+//     const formattedRequests = ownedForums.map((forum) => ({
+//       forumId: forum._id,
+//       forumName: forum.forumName,
+//       forumDescription: forum.forumDescription,
+//       forumImage: forum.forumImage,
+//       objective: forum.objective,
+//       pendingRequests: forum.pendingRequests,
+//     }));
+
+//     res.status(200).json({
+//       message: "Received requests for owned forums fetched successfully",
+//       forums: formattedRequests,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching received requests for owner:", error);
+//     res.status(500).json({
+//       message: "Failed to fetch received requests",
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.getReceivedRequestsForOwner = async (req, res) => {
   try {
     const ownerId = req.user.id; // Authenticated owner's ID
@@ -473,11 +566,15 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
       .populate([
         {
           path: "pendingRequests",
-          select: "_id firstName lastName email",
+          select: "_id name email companyDetails",
+        },
+        {
+          path: "invitedUsers",
+          select: "_id name email companyDetails",
         },
       ])
       .select(
-        "forumName forumDescription forumImage objective pendingRequests"
+        "forumName forumDescription forumImage objective pendingRequests invitedUsers"
       );
 
     // Check if the owner has any forums
@@ -487,7 +584,7 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
       });
     }
 
-    // Format the response with forums and their pending requests
+    // Format the response with forums, their pending requests, and invited users
     const formattedRequests = ownedForums.map((forum) => ({
       forumId: forum._id,
       forumName: forum.forumName,
@@ -495,16 +592,18 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
       forumImage: forum.forumImage,
       objective: forum.objective,
       pendingRequests: forum.pendingRequests,
+      invitedUsers: forum.invitedUsers,
     }));
 
     res.status(200).json({
-      message: "Received requests for owned forums fetched successfully",
+      message:
+        "Received requests and invited users for owned forums fetched successfully",
       forums: formattedRequests,
     });
   } catch (error) {
     console.error("Error fetching received requests for owner:", error);
     res.status(500).json({
-      message: "Failed to fetch received requests",
+      message: "Failed to fetch received requests and invited users",
       error: error.message,
     });
   }
