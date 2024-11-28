@@ -299,7 +299,6 @@ exports.sendJoinRequest = async (req, res) => {
     // Save the forum document
     await forum.save();
 
-    // Return the updated forum information, including the request status
     const updatedForum = await ForumModel.findById(forumId).lean();
 
     // Returning the updated forum data including the request status
@@ -307,7 +306,7 @@ exports.sendJoinRequest = async (req, res) => {
       message: "Join request sent successfully.",
       updatedForum: {
         ...updatedForum,
-        requestStatus: "pending", // Add request status explicitly
+        requestStatus: "pending",
       },
     });
   } catch (error) {
@@ -325,8 +324,8 @@ exports.sendJoinRequest = async (req, res) => {
  */
 
 exports.acceptJoinRequest = async (req, res) => {
-  const { forumId, userId } = req.params; // Extract forumId and userId from route parameters.
-  const ownerId = req.user.id; // Assuming the authenticated owner is added to req.user.
+  const { forumId, userId } = req.params;
+  const ownerId = req.user.id;
 
   try {
     // Find the forum by ID
@@ -360,10 +359,6 @@ exports.acceptJoinRequest = async (req, res) => {
 
     // Save the forum document
     await forum.save();
-
-    // Optionally, notify the user that their request has been approved
-    // Example: sendNotification(userId, `Your request to join the forum '${forum.forumName}' has been approved.`);
-
     return res
       .status(200)
       .json({ message: "User has been added to the forum successfully." });
@@ -376,8 +371,8 @@ exports.acceptJoinRequest = async (req, res) => {
 };
 
 exports.rejectJoinRequest = async (req, res) => {
-  const { forumId, userId } = req.params; // Extract forumId and userId from route parameters.
-  const ownerId = req.user.id; // Assuming the authenticated owner is added to req.user.
+  const { forumId, userId } = req.params;
+  const ownerId = req.user.id;
 
   try {
     // Find the forum by ID
