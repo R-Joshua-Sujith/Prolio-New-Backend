@@ -11,7 +11,7 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
     },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
     forumId: { type: mongoose.Schema.Types.ObjectId, ref: "Forum" },
     isRead: { type: Boolean, default: false },
   },
