@@ -8,4 +8,7 @@ const {
 
 router.get("/:forumId/messages", messageController.getMessages);
 
+// Delete message by ID
+router.delete("/:id", looseVerify, messageController.deleteMessage);
+
 module.exports = router;

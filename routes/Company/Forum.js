@@ -55,7 +55,6 @@ router.get("/get-forum/:forumId", looseVerify, forumController.getForumById);
 // Route to delete a forum
 router.delete("/delete/:forumId", forumController.deleteForum);
 
-
 router.get("/check-forum-owner/:forumId", forumController.checkForumOwnership);
 
 // Route to send a join request to a forum
@@ -79,4 +78,23 @@ router.get(
   forumController.getReceivedRequestsForOwner
 );
 
+// Endpoint to get shared products
+router.post("/share-products", looseVerify, forumController.shareProducts);
+
+// Endpoint to get all customers
+router.get("/all-users", looseVerify, forumController.getAllCustomers);
+
+// Route to check the invited users for a specific forum
+router.get(
+  "/check-invitedUsers-request/:forumId",
+  looseVerify,
+  forumController.checkInvitedUsers
+);
+
+router.post("/leave-forum/:forumId", looseVerify, forumController.leaveForum);
+
+// router.get(
+//   "/all-productbyforum/:forumId",
+//   forumController.getProductsByForumId
+// );
 module.exports = router;

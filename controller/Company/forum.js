@@ -1,12 +1,12 @@
 const mongoose = require("mongoose");
-
 const socketIo = require("socket.io");
-
 const ForumModel = require("../../models/Forum");
 const ProductModel = require("../../models/Product");
-
 const { uploadToS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
+const Message = require("../../models/message");
+const CustomerModel = require("../../models/Customer");
+const Notification = require("../../models/Notification");
 
 exports.createForum = async (req, res) => {
   const { forumName, forumDescription, objective } = req.body;
@@ -57,58 +57,6 @@ exports.createForum = async (req, res) => {
   } catch (error) {
     console.error("Error creating forum:", error);
     sendResponse(res, 500, "Error creating forum", { error: error.message });
-  }
-};
-
-exports.sendInvitations = async (req, res) => {
-  const { forumId } = req.params;
-  const { inviteEmails } = req.body;
-
-  try {
-    // Validate the input
-    if (!forumId || !Array.isArray(inviteEmails) || inviteEmails.length === 0) {
-      return res.status(400).json({ message: "Invalid request" });
-    }
-
-    // Find the forum by ID
-    const forum = await Forum.findById(forumId);
-    if (!forum) {
-      return res.status(404).json({ message: "Forum not found" });
-    }
-
-    // Fetch invited users
-    const invitedUsers = await User.find({ email: { $in: inviteEmails } });
-    const invitedUserIds = invitedUsers.map((user) => user._id);
-
-    // Update the forum's invited users
-    forum.invitedUsers.push(...invitedUserIds);
-    await forum.save();
-
-    // Send notifications to invited users
-    for (const invitee of invitedUsers) {
-      const notification = new Notification({
-        userId: invitee._id,
-        message: `You have been invited to join the forum: ${forum.forumName}`,
-        forumId: forum._id,
-        type: "invite",
-      });
-      await notification.save();
-
-      // Emit notification to the user if they are online
-      if (req.io) {
-        req.io.to(invitee._id.toString()).emit("notification", notification);
-      }
-    }
-
-    res.status(200).json({
-      message: "Invitations sent successfully",
-      invitedUsers: invitedUsers,
-    });
-  } catch (error) {
-    console.error("Error sending invitations:", error);
-    res
-      .status(500)
-      .json({ message: "Error sending invitations", error: error.message });
   }
 };
 
@@ -286,7 +234,7 @@ exports.getForumById = async (req, res) => {
     // Fetch the forum by its ID and populate members
     const forum = await ForumModel.findById(forumId).populate({
       path: "members",
-      select: "name", // Select only the necessary fields
+      select: "name",
     });
 
     // Check if the forum exists
@@ -310,7 +258,7 @@ exports.getForumById = async (req, res) => {
 
 exports.sendJoinRequest = async (req, res) => {
   const { forumId } = req.params;
-  const userId = req.user.id; // Assuming the user is added to req.user via authentication middleware.
+  const userId = req.user.id;
 
   try {
     // Find the forum by ID
@@ -350,9 +298,6 @@ exports.sendJoinRequest = async (req, res) => {
 
     // Save the forum document
     await forum.save();
-
-    // Notify the forum owner (optional placeholder for notification logic)
-    // Example: sendNotification(forum.ownerId, `${req.user.name} wants to join your forum.`);
 
     // Return the updated forum information, including the request status
     const updatedForum = await ForumModel.findById(forumId).lean();
@@ -429,7 +374,6 @@ exports.acceptJoinRequest = async (req, res) => {
       .json({ message: "An error occurred. Please try again later." });
   }
 };
-
 
 /**
  * Get forums created by the user or where the user is a member.
@@ -533,6 +477,285 @@ exports.checkForumOwnership = async (req, res) => {
     console.error("Error checking forum ownership:", error);
     res.status(500).json({
       message: "Error checking forum ownership",
+      error: error.message,
+    });
+  }
+};
+
+exports.shareProducts = async (req, res) => {
+  const { forumId, products } = req.body;
+  const ownerId = req.user?.id;
+  if (
+    !forumId ||
+    !products ||
+    !Array.isArray(products) ||
+    products.length === 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Forum ID and a non-empty products array are required.",
+    });
+  }
+
+  try {
+    // Loop through the products and create messages for each valid product
+    const messages = await Promise.all(
+      products.map(async (product) => {
+        if (
+          !product.name ||
+          !product.productImage ||
+          !product.shareableLink ||
+          !product._id
+        ) {
+          console.warn(`Skipping invalid product: ${JSON.stringify(product)}`);
+          return null;
+        }
+
+        const newMessage = new Message({
+          forumId,
+          ownerId,
+          text: `Check out this product: ${product.name}\n${product.shareableLink}`,
+          attachment: product.productImage || image,
+          productId: product._id,
+        });
+
+        const savedMessage = await newMessage.save();
+
+        // Log the saved message
+        console.log("Saved Message:", savedMessage);
+
+        return {
+          productId: product._id,
+          message: savedMessage,
+        };
+      })
+    );
+
+    const validMessages = messages.filter((msg) => msg !== null);
+    if (validMessages.length === 0) {
+      return sendResponse(res, 400, false, "No valid products");
+    }
+    return sendResponse(
+      res,
+      201,
+      true,
+      "Products shared successfully!",
+      validMessages
+    );
+  } catch (error) {
+    // Log the error details
+    console.error("Error sharing products:", error);
+    return sendResponse(res, 500, false, "Error sharing products.", {
+      error: error.message,
+    });
+  }
+};
+
+exports.getAllCustomers = async (req, res) => {
+  try {
+    const { search = "", page = 1, limit = 10 } = req.query;
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    // Create a dynamic search filter
+    const searchFilter = search
+      ? {
+          $or: [
+            { email: { $regex: search, $options: "i" } },
+            { name: { $regex: search, $options: "i" } },
+            {
+              "companyDetails.companyInfo.companyName": {
+                $regex: search,
+                $options: "i",
+              },
+            }, // Search in company name
+            {
+              "companyDetails.companyInfo.ownerName": {
+                $regex: search,
+                $options: "i",
+              },
+            }, // Search in owner name
+          ],
+        }
+      : {};
+
+    // Calculate the number of documents to skip
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Fetch customers with pagination and search
+    const customers = await CustomerModel.find(searchFilter)
+      .skip(skip)
+      .limit(limitNumber)
+      .sort({ createdAt: -1 }); // Sort by creation date
+
+    // Get the total count for the given search filter
+    const totalCustomers = await CustomerModel.countDocuments(searchFilter);
+
+    return sendResponse(res, 200, true, "Customers fetched successfully", {
+      customers,
+      pagination: {
+        totalCustomers,
+        currentPage: pageNumber,
+        totalPages: Math.ceil(totalCustomers / limitNumber),
+        pageSize: customers.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching customers:", error);
+    return sendResponse(res, 500, false, "Failed to fetch customers", {
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Function to validate and fetch the forum using the forumId param.
+ * @param {string} forumId - The ID of the forum.
+ * @returns {Promise<Forum|null>} - The forum document if found, or null if not.
+ */
+
+const getForumById = async (forumId) => {
+  const forum = await ForumModel.findById(forumId);
+  return forum;
+};
+
+/**
+ * Function to send invitations to users.
+ */
+
+exports.sendInvitations = async (req, res) => {
+  const { forumId } = req.params;
+  const { inviteEmails } = req.body;
+  console.log("forumID", "--------->", forumId);
+
+  try {
+    // Validate the input
+    if (!forumId || !Array.isArray(inviteEmails) || inviteEmails.length === 0) {
+      return sendResponse(res, 400, false, "Invalid request");
+    }
+
+    const forum = await getForumById(forumId);
+    if (!forum) {
+      return sendResponse(res, 404, false, "Forum not found");
+    }
+
+    const invitedUsers = await CustomerModel.find({
+      email: { $in: inviteEmails },
+    });
+    const invitedUserIds = invitedUsers.map((owner) => owner._id);
+    forum.invitedUsers.push(...invitedUserIds);
+    await forum.save();
+
+    // Send notifications to the invited users
+    for (const invitee of invitedUsers) {
+      const notification = new Notification({
+        ownerId: invitee._id,
+        message: `You have been invited to join the forum: ${forum.forumName}`,
+        forumId: forum._id,
+        type: "invite",
+      });
+      await notification.save();
+      console.log(
+        `Notification created for user ${invitee._id}:`,
+        notification
+      );
+
+      // Emit notification to the user if they are online (via socket.io)
+      if (req.io) {
+        req.io.to(invitee._id.toString()).emit("notification", notification);
+        console.log(`Notification sent to user ${invitee._id.toString()}`);
+      } else {
+        console.log(
+          `Socket.io not available for user ${invitee._id.toString()}`
+        );
+      }
+    }
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Invitations sent successfully",
+      invitedUsers
+    );
+  } catch (error) {
+    console.error("Error sending invitations:", error);
+    return sendResponse(res, 500, false, "Error sending invitations", {
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Controller function to check the invited users for a specific forum.
+ *
+ * @param {Object} req -request data.
+ * @param {Object} res -The response object used to send the response.
+ *
+ * - Fetches all users in the database and compares them to the invitedUsers of the forum.
+ */
+exports.checkInvitedUsers = async (req, res) => {
+  const { forumId } = req.params;
+  try {
+    const forum = await ForumModel.findById(forumId).populate("invitedUsers");
+    if (!forum) {
+      return sendResponse(res, 404, false, "Forum not found");
+    }
+    const allUsers = await CustomerModel.find({});
+
+    // Map each user to an object containing their email and their invitation status
+    const invitedUsersWithStatus = allUsers.map((user) => ({
+      email: user.email,
+      invited: forum.invitedUsers.some((invitedUser) =>
+        invitedUser._id.equals(user._id)
+      ),
+    }));
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Invited users retrieved successfully",
+      invitedUsersWithStatus
+    );
+  } catch (error) {
+    console.error("Error checking invited users:", error);
+    return sendResponse(res, 500, false, "Error checking invited users", {
+      error: error.message,
+    });
+  }
+};
+
+exports.leaveForum = async (req, res) => {
+  const { forumId } = req.params;
+  const ownerId = req.user?.id;
+
+  try {
+    if (!forumId || !ownerId) {
+      return sendResponse(res, 400, false, "Invalid request");
+    }
+
+    const forum = await ForumModel.findById(forumId);
+    if (!forum) {
+      return sendResponse(res, 404, false, "Forum not found");
+    }
+
+    if (!forum.members.includes(ownerId)) {
+      return sendResponse(res, 400, false, "User is not a member of the forum");
+    }
+
+    // Remove the user from the forum's members array
+    forum.members = forum.members.filter(
+      (memberId) => memberId.toString() !== ownerId.toString()
+    );
+    await forum.save();
+
+    return sendResponse(res, 200, true, "Successfully left the forum", {
+      forum,
+    });
+  } catch (error) {
+    console.error("Error leaving forum:", error);
+    return sendResponse(res, 500, false, "Error leaving forum", {
       error: error.message,
     });
   }
