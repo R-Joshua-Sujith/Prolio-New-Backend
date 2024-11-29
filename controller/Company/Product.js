@@ -67,6 +67,7 @@ const createProduct = async (req, res) => {
       dynamicSteps: formData.dynamicSteps.steps,
       category: {
         categoryId: formData.category.categoryId,
+        subCategoryId: formData.category.subCategoryId
       },
       opportunities: formData.opportunities,
     });
