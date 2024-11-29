@@ -17,13 +17,14 @@ const upload = multer({
 router.patch(
   "/update-profile",
   upload.single("profileImage"),
+  customerVerify,
   profileContoller.updateCustomerProfile
 );
 
 router.get(
-  "/customer-details",
-  looseVerify,
-  profileContoller.getCustomerDetails
+  "/customer-profile",
+  customerVerify,
+  profileContoller.getCustomerProfile
 );
 
 module.exports = router;

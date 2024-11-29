@@ -3,6 +3,7 @@ const CustomerModel = require("../../models/Customer");
 const CompanyUserModel = require("../../models/CompanyUser");
 const ProductModel = require("../../models/Product");
 const { apiResponse, sendResponse } = require("../../utils/responseHandler");
+const mongoose = require("mongoose");
 
 const enquiryController = {
   /**
@@ -92,58 +93,58 @@ const enquiryController = {
 
   /**
    * Get messages for an enquiry
-   * @route GET /customer/enquiry/messages/:enquiryId
+   * @route GET /customer/enquiry/messages/:productId
    * @param {string} enquiryId - ID of the enquiry
    * @param {number} limit - Number of messages per page (default: 10)
    * @returns {Object} Paginated messages and metadata
    */
-  getEnquiryByProductId: async (req, res) => {
+
+  getCustomerEnquiryMessages: async (req, res) => {
     try {
       const { productId } = req.params;
-      const page = parseInt(req.query.page, 10) || 1;
-      const limit = parseInt(req.query.limit, 10) || 10;
-      const skip = (page - 1) * limit;
+      const customerId = req.user?.id;
 
-      // Find the enquiry by productId
-      const enquiry = await EnquiryModel.findOne({ productId: productId });
+      // Validate productId and customerId format
+      if (
+        !mongoose.Types.ObjectId.isValid(productId) ||
+        !mongoose.Types.ObjectId.isValid(customerId)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid product ID or customer ID format",
+        });
+      }
+
+      // Find enquiry with matching productId and customerId
+      const enquiry = await EnquiryModel.findOne({
+        productId: productId,
+        $or: [{ customerId: customerId }, { ownerId: customerId }],
+      });
+
+      // If no enquiry found
       if (!enquiry) {
-        return apiResponse.error(
-          res,
-          404,
-          "Enquiry not found for this product"
-        );
+        return res.status(404).json({
+          success: false,
+          message: "No enquiry found for this product and customer",
+        });
       }
 
-      const userId = req.user.id;
-      const customerId = enquiry.customerId.toString();
-      const ownerId = enquiry.ownerId.toString();
-
-      // Check if the current user is authorized to access this enquiry
-      if (![customerId, ownerId].includes(userId.toString())) {
-        return apiResponse.error(
-          res,
-          403,
-          "Unauthorized access to this enquiry"
-        );
-      }
-
-      const totalMessages = enquiry.messages.length;
-      const messages = enquiry.messages
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Sort messages by latest first
-        .slice(skip, skip + limit); // Apply pagination (skip + limit)
-
-      return apiResponse.success(res, 200, "Messages retrieved successfully", {
-        messages,
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(totalMessages / limit),
-          totalMessages,
-          hasMore: skip + limit < totalMessages, // Check if there are more messages
+      // Return all messages from the enquiry
+      return res.status(200).json({
+        success: true,
+        data: {
+          enquiryId: enquiry._id,
+          status: enquiry.status,
+          messages: enquiry.messages, // No filtering, all messages are returned
         },
       });
     } catch (error) {
-      console.error("Error retrieving messages by productId:", error);
-      return apiResponse.error(res, 500, "Error retrieving messages", error);
+      console.error("Error in getCustomerEnquiryMessages:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message,
+      });
     }
   },
 
@@ -195,5 +196,4 @@ const enquiryController = {
     }
   },
 };
-
 module.exports = enquiryController;
