@@ -508,13 +508,9 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
           path: "pendingRequests",
           select: "_id name email companyDetails",
         },
-        {
-          path: "invitedUsers",
-          select: "_id name email companyDetails",
-        },
       ])
       .select(
-        "forumName forumDescription forumImage objective pendingRequests invitedUsers"
+        "forumName forumDescription forumImage objective pendingRequests"
       );
 
     // Check if the owner has any forums
@@ -524,7 +520,7 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
       });
     }
 
-    // Format the response with forums, their pending requests, and invited users
+    // Format the response with forums and their pending requests
     const formattedRequests = ownedForums.map((forum) => ({
       forumId: forum._id,
       forumName: forum.forumName,
@@ -532,18 +528,16 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
       forumImage: forum.forumImage,
       objective: forum.objective,
       pendingRequests: forum.pendingRequests,
-      invitedUsers: forum.invitedUsers,
     }));
 
     res.status(200).json({
-      message:
-        "Received requests and invited users for owned forums fetched successfully",
+      message: "Received requests for owned forums fetched successfully",
       forums: formattedRequests,
     });
   } catch (error) {
     console.error("Error fetching received requests for owner:", error);
     res.status(500).json({
-      message: "Failed to fetch received requests and invited users",
+      message: "Failed to fetch received requests",
       error: error.message,
     });
   }
@@ -851,6 +845,355 @@ exports.leaveForum = async (req, res) => {
   } catch (error) {
     console.error("Error leaving forum:", error);
     return sendResponse(res, 500, false, "Error leaving forum", {
+      error: error.message,
+    });
+  }
+};
+
+exports.getOwnerForumInvites = async (req, res) => {
+  try {
+    const userId = req.user.id; // Assuming you have auth middleware setting req.user
+
+    // Find all forums owned by the user
+    const forums = await ForumModel.find({
+      ownerId: userId,
+    }).populate({
+      path: "invitedUsers",
+      select:
+        "name email status profile companyDetails.companyInfo.companyName",
+      model: "Customer",
+    });
+
+    // Transform the data to match UI requirements
+    const formattedForumInvites = forums.map((forum) => ({
+      forumId: forum._id,
+      forumName: forum.forumName,
+      forumDescription: forum.forumDescription,
+      forumImage: forum.forumImage,
+      totalInvites: forum.invitedUsers.length,
+      invitedUsers: forum.invitedUsers.map((user) => ({
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        status: user.status,
+        profileImage: user.profile?.url || null,
+        companyDetails: {
+          companyInfo: {
+            companyName: user.companyDetails?.companyInfo?.companyName || null,
+          },
+        },
+      })),
+    }));
+
+    // Segregate forums based on invite status
+    const segregatedForumInvites = {
+      activeForums: formattedForumInvites.filter(
+        (forum) => forum.totalInvites > 0
+      ),
+      emptyForums: formattedForumInvites.filter(
+        (forum) => forum.totalInvites === 0
+      ),
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalOwnedForums: forums.length,
+        ...segregatedForumInvites,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getOwnerForumInvites:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// Owner Cancels the Request
+exports.cancelForumInvite = async (req, res) => {
+  try {
+    const { forumId, userId } = req.body;
+    const ownerId = req.user.id; // From authentication middleware
+
+    // Find the forum and verify the owner
+    const forum = await ForumModel.findOne({
+      _id: forumId,
+      ownerId: ownerId,
+    });
+
+    if (!forum) {
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found or you are not the owner",
+      });
+    }
+
+    // Remove the user from invitedUsers array
+    await ForumModel.findByIdAndUpdate(forumId, {
+      $pull: { invitedUsers: userId },
+    });
+
+    // // Optionally, you might want to create a notification or log the cancellation
+    // await NotificationModel.create({
+    //   userId: userId,
+    //   type: "FORUM_INVITE_CANCELLED",
+    //   message: `Invitation to forum "${forum.forumName}" has been cancelled`,
+    //   forumId: forumId,
+    // });
+
+    return res.status(200).json({
+      success: true,
+      message: "Forum invitation cancelled successfully",
+    });
+  } catch (error) {
+    console.error("Error cancelling forum invite:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getUserSentRequests = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all forums
+    const allForums = await ForumModel.find({
+      ownerId: { $ne: userId }, // Exclude user's owned forums
+    })
+      .populate("ownerId", "name email companyDetails")
+      .select(
+        "forumName forumDescription objective forumImage isActive createdAt pendingRequests"
+      );
+
+    // Filter forums where user has pending request
+    const forumsWithPendingRequests = allForums.filter((forum) => {
+      return forum.pendingRequests.some(
+        (requestId) => requestId.toString() === userId.toString()
+      );
+    });
+
+    res.status(200).json({
+      success: true,
+      count: forumsWithPendingRequests.length,
+      data: forumsWithPendingRequests,
+    });
+  } catch (error) {
+    console.error("Error fetching user sent requests:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.cancelUserRequest = async (req, res) => {
+  try {
+    const forumId = req.params.forumId;
+    const userId = req.user.id;
+
+    console.log("Attempting to cancel request for:", {
+      forumId,
+      userId,
+    });
+
+    // Find the forum
+    const forum = await ForumModel.findById(forumId);
+    console.log("Forum search result:", forum ? "Found" : "Not Found");
+
+    if (!forum) {
+      console.log("Forum not found for ID:", forumId);
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found",
+      });
+    }
+
+    // Check if user actually has a pending request
+    const hasPendingRequest = forum.pendingRequests.includes(userId);
+    console.log("Pending requests status:", {
+      hasPendingRequest,
+      currentPendingRequests: forum.pendingRequests,
+      searchingForUserId: userId,
+    });
+
+    if (!hasPendingRequest) {
+      console.log("No pending request found for user:", userId);
+      return res.status(400).json({
+        success: false,
+        message: "No pending request found for this forum",
+      });
+    }
+
+    // Remove user from pendingRequests array
+    const originalLength = forum.pendingRequests.length;
+    forum.pendingRequests = forum.pendingRequests.filter(
+      (requestId) => requestId.toString() !== userId.toString()
+    );
+    console.log("Pending requests update:", {
+      beforeLength: originalLength,
+      afterLength: forum.pendingRequests.length,
+      removed: originalLength - forum.pendingRequests.length,
+    });
+
+    await forum.save();
+    console.log("Forum updated successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Forum join request cancelled successfully",
+    });
+  } catch (error) {
+    console.error("Error cancelling forum request:", {
+      error: error.message,
+      stack: error.stack,
+      forumId: req.params.forumId,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getUserReceivedRequests = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all forums where the user is in the invitedUsers array
+    const forumsWithReceivedRequests = await ForumModel.find({
+      invitedUsers: userId,
+      ownerId: { $ne: userId }, // Exclude user's owned forums
+    })
+      .populate("ownerId", "name email companyDetails")
+      .select(
+        "forumName forumDescription objective forumImage isActive createdAt invitedUsers"
+      );
+
+    res.status(200).json({
+      success: true,
+      count: forumsWithReceivedRequests.length,
+      data: forumsWithReceivedRequests,
+    });
+  } catch (error) {
+    console.error("Error fetching user received requests:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.acceptForumInvitation = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { forumId } = req.params;
+
+    // Validate forumId
+    if (!mongoose.Types.ObjectId.isValid(forumId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid forum ID format",
+      });
+    }
+
+    // Find and update the forum
+    const forum = await ForumModel.findOneAndUpdate(
+      {
+        _id: forumId,
+        invitedUsers: userId, // Check if user is actually invited
+        members: { $ne: userId }, // Make sure user isn't already a member
+      },
+      {
+        $pull: { invitedUsers: userId }, // Remove from invitedUsers
+        $addToSet: { members: userId }, // Add to members
+      },
+      { new: true }
+    ).populate("ownerId", "name email companyDetails");
+
+    // If forum not found or user wasn't invited
+    if (!forum) {
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found or no invitation exists",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Forum invitation accepted successfully",
+      data: forum,
+    });
+  } catch (error) {
+    console.error("Error accepting forum invitation:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.rejectForumInvitation = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { forumId } = req.params;
+    const { rejectionReason } = req.body; // Optional rejection reason
+
+    // Validate forumId
+    if (!mongoose.Types.ObjectId.isValid(forumId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid forum ID format",
+      });
+    }
+
+    // Find and update the forum
+    const forum = await ForumModel.findOneAndUpdate(
+      {
+        _id: forumId,
+        invitedUsers: userId, // Check if user is actually invited
+      },
+      {
+        $pull: { invitedUsers: userId }, // Remove from invitedUsers
+        $push: {
+          rejectionReasons: {
+            userId,
+            reason: rejectionReason || "No reason provided",
+            createdAt: new Date(),
+          },
+        },
+      },
+      { new: true }
+    ).populate("ownerId", "name email companyDetails");
+
+    // If forum not found or user wasn't invited
+    if (!forum) {
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found or no invitation exists",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Forum invitation rejected successfully",
+      data: forum,
+    });
+  } catch (error) {
+    console.error("Error rejecting forum invitation:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
       error: error.message,
     });
   }

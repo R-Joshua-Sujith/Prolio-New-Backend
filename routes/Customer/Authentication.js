@@ -21,6 +21,11 @@ router.get(
   customerAuthenticationContoller.checkVerificationStatus
 );
 
+router.get(
+  "/check-company-status",
+  looseVerify, // Your authentication middleware
+  customerAuthenticationContoller.checkCompanyStatus
+);
 
 // Route to send OTP
 router.post("/send-otp", customerAuthenticationContoller.sendOTP);

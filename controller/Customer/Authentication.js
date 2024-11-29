@@ -287,3 +287,48 @@ exports.verifyOTP = async (req, res) => {
     return sendResponse(res, 500, false, error.message);
   }
 };
+
+// Backend controller
+exports.checkCompanyStatus = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await Customer.findById(userId).select(
+      "isCompany companyDetails.companyInfo.companyName"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const companyStatus = {
+      isApplied: user.isCompany.applied,
+      isVerified: user.isCompany.verified,
+      isRejected: user.isCompany.rejected,
+      companyName: user.companyDetails?.companyInfo?.companyName || null,
+      // Remove the getCompanyStatusText call since it's not defined
+      status: user.isCompany.verified 
+        ? "Verified" 
+        : user.isCompany.rejected 
+        ? "Rejected" 
+        : user.isCompany.applied 
+        ? "Pending" 
+        : "Not Applied"
+    };
+
+    res.status(200).json({
+      success: true,
+      data: companyStatus,
+    });
+  } catch (error) {
+    console.error("Error checking company status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
