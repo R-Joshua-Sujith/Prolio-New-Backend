@@ -27,4 +27,11 @@ router.get(
   companyEnquiryController.getCustomerDetailsByEnquiryId
 );
 
+router.get(
+  "/count-all-enquiries",
+  companyVerify,
+  companyEnquiryController.getOwnerEnquiriesCount
+);
+
+
 module.exports = router;
