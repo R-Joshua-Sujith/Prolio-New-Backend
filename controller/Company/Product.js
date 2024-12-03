@@ -88,6 +88,81 @@ const createProduct = async (req, res) => {
   }
 };
 
+const updateProduct = async (req, res) => {
+  console.log("hi")
+  try {
+    const productId = req.params.id;
+
+    const formData = req.body.formData
+    const ownerId = req.user.id;
+
+    console.log("id", productId)
+    console.log(formData)
+
+    if (!ownerId) {
+      return sendResponse(res, 500, true, "User ID Not Found");
+    }
+
+    // Check if product exists
+    const existingProduct = await ProductModel.findById(productId);
+
+    if (!existingProduct) {
+      return sendResponse(res, 404, false, "Product not found");
+    }
+
+    // Verify ownership
+    if (existingProduct.ownerId.toString() !== ownerId) {
+      return sendResponse(res, 403, false, "Unauthorized to edit this product");
+    }
+
+    // Check if new id/slug conflicts with other products (excluding current product)
+    const duplicateProduct = await ProductModel.findOne({
+      _id: { $ne: productId },
+      $or: [
+        { "basicDetails.id": formData.basicDetails.id },
+        { "basicDetails.slug": formData.basicDetails.slug },
+      ],
+    });
+
+    if (duplicateProduct) {
+      const duplicateField =
+        duplicateProduct.basicDetails.id === formData.basicDetails.id
+          ? "id"
+          : "slug";
+      return sendResponse(
+        res,
+        400,
+        false,
+        `Another product with this ${duplicateField} already exists`
+      );
+    }
+
+    // Update product
+    const updatedProduct = await ProductModel.findByIdAndUpdate(
+      productId,
+      {
+        basicDetails: formData.basicDetails,
+        colors: formData.colors,
+        attributes: formData.attributes,
+        category: {
+          categoryId: formData.category.categoryId,
+          subCategoryId: formData.category.subCategoryId
+        },
+        dynamicSteps: formData.dynamicSteps,
+        opportunities: formData.opportunities,
+      },
+      { new: true } // Returns the updated document
+    );
+
+    sendResponse(res, 200, true, "Product updated successfully", updatedProduct);
+  } catch (error) {
+    console.error("Error updating product:", error);
+    sendResponse(res, 500, false, "Error updating product", {
+      details: error.message,
+    });
+  }
+};
+
 /**
  * Function to delete a product from S3 and database
  * @param {Object} req - request object
@@ -394,6 +469,97 @@ const getCompanyProducts = async (req, res) => {
   }
 };
 
+const addProductImage = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const ownerId = req.user.id;
+
+    // Check if product exists and belongs to user
+    const product = await ProductModel.findOne({ _id: productId, ownerId });
+    if (!product) {
+      return sendResponse(res, 404, false, "Product not found");
+    }
+
+    // Check if product already has 4 images
+    if (product.images.length >= 4) {
+      return sendResponse(res, 400, false, "Maximum 4 images allowed");
+    }
+
+    // Upload image to S3
+    if (!req.file) {
+      return sendResponse(res, 400, false, "No image file provided");
+    }
+
+    const { url, filename } = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      "products"
+    );
+
+    // Add new image to product
+    const newImage = {
+      url,
+      publicId: filename
+    };
+
+    product.images.push(newImage);
+    await product.save();
+
+    sendResponse(res, 200, true, "Image added successfully", {
+      _id: product.images[product.images.length - 1]._id,
+      url,
+      publicId: filename
+    });
+
+  } catch (error) {
+    console.error("Error adding product image:", error);
+    sendResponse(res, 500, false, "Error adding product image", {
+      details: error.message,
+    });
+  }
+};
+
+/**
+ * Delete an image from a product
+ * @param {Object} req - request object
+ * @param {Object} res - response object
+ */
+const deleteProductImage = async (req, res) => {
+  try {
+    console.log("hi")
+    const { productId, imageId } = req.params;
+    const ownerId = req.user.id;
+
+    // Check if product exists and belongs to user
+    const product = await ProductModel.findOne({ _id: productId, ownerId });
+    if (!product) {
+      return sendResponse(res, 404, false, "Product not found");
+    }
+
+    // Find the image in the product
+    const image = product.images.id(imageId);
+    if (!image) {
+      return sendResponse(res, 404, false, "Image not found");
+    }
+
+    // Delete from S3
+    await deleteFromS3(image.publicId);
+
+    // Remove image from product
+    product.images.pull(imageId);
+    await product.save();
+
+    sendResponse(res, 200, true, "Image deleted successfully");
+
+  } catch (error) {
+    console.error("Error deleting product image:", error);
+    sendResponse(res, 500, false, "Error deleting product image", {
+      details: error.message,
+    });
+  }
+};
+
 module.exports = {
   test,
   createProduct,
@@ -403,4 +569,7 @@ module.exports = {
   getAllCompanyProducts,
   getProductById,
   getCompanyProducts,
+  updateProduct,
+  addProductImage,
+  deleteProductImage
 };

@@ -68,23 +68,20 @@ const uploadToS3 = async (file, filename, mimetype, folder) => {
   }
 };
 
-/**
- * Function to delete a file from S3
- * @param {string} url - The URL of the file to delete
- * @returns {void}
- */
-const deleteFromS3 = async (url) => {
+
+const deleteFromS3 = async (publicId) => {
   try {
-    const fileKey = extractS3KeyFromUrl(url);
-    if (!fileKey) throw new Error("Invalid S3 URL");
+    if (!publicId) {
+      throw new Error("No publicId provided for deletion");
+    }
 
     const command = new DeleteObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
-      Key: fileKey,
+      Key: publicId,
     });
 
     await s3Client.send(command);
-    console.log(`Successfully deleted ${fileKey} from S3`);
+    console.log(`Successfully deleted ${publicId} from S3`);
   } catch (error) {
     console.log("Error deleting file from S3:", error);
     throw error;
