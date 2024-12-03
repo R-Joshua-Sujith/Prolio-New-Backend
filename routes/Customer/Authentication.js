@@ -15,6 +15,7 @@ router.get(
 
 router.post("/register", customerAuthenticationContoller.register);
 router.post("/login", customerAuthenticationContoller.login);
+router.post("/google-login", customerAuthenticationContoller.googleLogin);
 router.get(
   "/check-verification",
   looseVerify,

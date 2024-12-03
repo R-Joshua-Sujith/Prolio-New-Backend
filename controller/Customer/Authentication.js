@@ -119,6 +119,8 @@ exports.checkVerificationStatus = async (req, res) => {
         message: "Unauthorized. User ID not found.",
       });
     }
+
+    // Fetch the customer record by ID
     const customer = await Customer.findById(customerId);
     if (!customer) {
       console.log("Customer not found for ID:", customerId);
@@ -127,10 +129,14 @@ exports.checkVerificationStatus = async (req, res) => {
         message: "Customer not found.",
       });
     }
-    // console.log("Customer verification status:", customer.status);
+
+    // Extract the `isCompany` object
+    const { isCompany } = customer;
+
+    // Return the `isCompany` object with statuses
     return res.status(200).json({
       success: true,
-      status: customer.status,
+      isCompany,
     });
   } catch (error) {
     console.error("Error checking verification status:", error);
@@ -310,13 +316,13 @@ exports.checkCompanyStatus = async (req, res) => {
       isRejected: user.isCompany.rejected,
       companyName: user.companyDetails?.companyInfo?.companyName || null,
       // Remove the getCompanyStatusText call since it's not defined
-      status: user.isCompany.verified 
-        ? "Verified" 
-        : user.isCompany.rejected 
-        ? "Rejected" 
-        : user.isCompany.applied 
-        ? "Pending" 
-        : "Not Applied"
+      status: user.isCompany.verified
+        ? "Verified"
+        : user.isCompany.rejected
+        ? "Rejected"
+        : user.isCompany.applied
+        ? "Pending"
+        : "Not Applied",
     };
 
     res.status(200).json({
@@ -330,5 +336,48 @@ exports.checkCompanyStatus = async (req, res) => {
       message: "Internal server error",
       error: error.message,
     });
+  }
+};
+
+exports.googleLogin = async (req, res) => {
+  try {
+    const { email, given_name: name, picture: profile } = req.body;
+
+    let user = await Customer.findOne({ email });
+
+    if (!user) {
+      // Create a new user if it doesn't exist
+      user = new Customer({
+        email,
+        name,
+        isGoogleLogin: true, // Set isGoogleLogin to true for new users
+        profile: {
+          url: profile,
+          publicId: profile.split("/").pop(),
+        },
+      });
+      await user.save();
+    } else {
+      // Update isGoogleLogin to true for existing users
+      if (!user.isGoogleLogin) {
+        user.isGoogleLogin = true;
+        await user.save();
+      }
+    }
+
+    const payload = {
+      id: user._id,
+    };
+
+    // Generate JWT token
+    const token = jwt.sign(payload, process.env.JWT_SECRET_KEY, {
+      expiresIn: "1d",
+    });
+
+    // Send the response with token
+    res.status(200).json({ token });
+  } catch (error) {
+    console.error("Error logging in:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };
