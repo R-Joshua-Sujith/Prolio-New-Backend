@@ -23,6 +23,10 @@ const customerSchema = new Schema(
       url: { type: String },
       publicId: { type: String },
     },
+    isGoogleLogin: {
+      type: Boolean,
+      default: false,
+    },
     isCompany: {
       applied: { type: Boolean, default: false },
       verified: { type: Boolean, default: false },
@@ -39,6 +43,7 @@ const customerSchema = new Schema(
         yearEstablishment: { type: Number },
         gstNo: { type: String },
         businessType: { type: String },
+        companyAbout: { type: String },
         totalEmployees: { type: Number },
       },
       contactInfo: {

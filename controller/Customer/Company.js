@@ -59,6 +59,7 @@ const companyController = {
           yearEstablishment: formData.yearEstablishment,
           gstNo: formData.gstNo,
           businessType: formData.businessType,
+          businessType: formData.businessType,
           totalEmployees: formData.totalEmployees,
         },
         contactInfo: {

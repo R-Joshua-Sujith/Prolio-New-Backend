@@ -129,7 +129,7 @@ exports.toggleForumActiveStatus = async (req, res) => {
 
 exports.getOwnForums = async (req, res) => {
   try {
-    const ownerId = req.user?.id;
+    const ownerId = req.user?.id; // Assuming req.user contains the authenticated user's details
     const { search = "", page = 1, limit = 10 } = req.query;
 
     // Pagination options
@@ -144,13 +144,17 @@ exports.getOwnForums = async (req, res) => {
         }
       : {};
 
-    // Fetch forums with search and pagination
+    // Fetch forums with search, pagination, and populate
     const ownForums = await ForumModel.find({
       ownerId,
       ...searchQuery,
     })
       .skip(skip)
-      .limit(perPage);
+      .limit(perPage)
+      .populate({
+        path: "ownerId",
+        select: "companyDetails name",
+      });
 
     // Get total count for pagination metadata
     const totalForums = await ForumModel.countDocuments({
