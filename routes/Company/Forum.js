@@ -26,22 +26,22 @@ router.post(
 // Route for sending invitations
 router.post(
   "/send-invitations/:forumId",
-  companyVerify,
+  looseVerify,
   forumController.sendInvitations
 );
 
 // Route for leaving a forum
-router.post("/leave-forum/:forumId", companyVerify, forumController.leaveForum);
+router.post("/leave-forum/:forumId", looseVerify, forumController.leaveForum);
 
 // Route to check if the logged-in user is the owner of the forum
 router.get(
   "/check-forum-owner/:forumId",
-  companyVerify,
+  looseVerify,
   forumController.checkForumOwnership
 );
 
 // Route to get own forums
-router.get("/own-forums", companyVerify, forumController.getOwnForums);
+router.get("/own-forums", looseVerify, forumController.getOwnForums);
 
 // Route to get all active forums excluding ownner's Forum
 router.get("/all-forums", looseVerify, forumController.getAllForums);
@@ -53,7 +53,10 @@ router.get("/get-forums", looseVerify, forumController.getForums);
 router.get("/get-forum/:forumId", looseVerify, forumController.getForumById);
 
 // Route to delete a forum
-router.delete("/delete/:forumId", forumController.deleteForum);
+router.delete("/delete/:forumId", looseVerify, forumController.deleteForum);
+
+// Toggle active/inactive status for a forum
+router.patch("/:id/toggle-active", forumController.toggleForumActiveStatus);
 
 router.get("/check-forum-owner/:forumId", forumController.checkForumOwnership);
 
@@ -67,14 +70,38 @@ router.post(
 // Accept the Request
 router.post(
   "/accept-request/:forumId/:userId",
-  companyVerify,
+  looseVerify,
   forumController.acceptJoinRequest
 );
 
 router.post(
   "/reject-request/:forumId/:userId",
-  companyVerify, // Middleware to authenticate and authorize the user
-  forumController.rejectJoinRequest // Controller handling the rejection
+  looseVerify,
+  forumController.rejectJoinRequest
+);
+
+// Endpoint to get shared products
+router.post("/share-products", companyVerify, forumController.shareProducts);
+
+// Endpoint to get all customers
+router.get("/all-users", companyVerify, forumController.getAllCustomers);
+
+// Route to check the invited users for a specific forum
+router.get(
+  "/check-invitedUsers-request/:forumId",
+  companyVerify,
+  forumController.checkInvitedUsers
+);
+
+router.get(
+  "/all-productbyforum/:forumId",
+  forumController.getProductsByForumId
+);
+
+// route for fetching participants details in a forum
+router.get(
+  "/participants-details/:forumId",
+  forumController.getParticipantsDetails
 );
 
 // GET endpoint for received forum requests
@@ -84,23 +111,44 @@ router.get(
   forumController.getReceivedRequestsForOwner
 );
 
-// Endpoint to get shared products
-router.post("/share-products", looseVerify, forumController.shareProducts);
+router.post("/leave-forum/:forumId", companyVerify, forumController.leaveForum);
 
-// Endpoint to get all customers
-router.get("/all-users", looseVerify, forumController.getAllCustomers);
-
-// Route to check the invited users for a specific forum
 router.get(
-  "/check-invitedUsers-request/:forumId",
-  looseVerify,
-  forumController.checkInvitedUsers
+  "/getForumInvites",
+  companyVerify,
+  forumController.getOwnerForumInvites
 );
 
-router.post("/leave-forum/:forumId", looseVerify, forumController.leaveForum);
+router.post("/cancel-invite", companyVerify, forumController.cancelForumInvite);
 
-// router.get(
-//   "/all-productbyforum/:forumId",
-//   forumController.getProductsByForumId
-// );
+router.get(
+  "/user-sent-requests",
+  looseVerify,
+  forumController.getUserSentRequests
+);
+
+router.delete(
+  "/user-cancel-request/:forumId", // Add :forumId parameter
+  looseVerify,
+  forumController.cancelUserRequest
+);
+
+router.get(
+  "/user-received-requests",
+  looseVerify,
+  forumController.getUserReceivedRequests
+);
+
+router.post(
+  "/accept-forum-invitation/:forumId",
+  looseVerify,
+  forumController.acceptForumInvitation
+);
+
+router.post(
+  "/reject-forum-invitation/:forumId",
+  looseVerify,
+  forumController.rejectForumInvitation
+);
+
 module.exports = router;

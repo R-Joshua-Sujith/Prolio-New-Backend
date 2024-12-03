@@ -60,71 +60,31 @@ exports.createForum = async (req, res) => {
   }
 };
 
-exports.leaveForum = async (req, res) => {
-  const { forumId } = req.params;
-  const userId = req.user?.userId;
-
-  try {
-    if (!forumId || !userId) {
-      return res.status(400).json({ message: "Invalid request" });
-    }
-
-    // Find the forum
-    const forum = await Forum.findById(forumId);
-    if (!forum) {
-      return res.status(404).json({ message: "Forum not found" });
-    }
-
-    // Check if the user is a member of the forum
-    if (!forum.members.includes(userId)) {
-      return res
-        .status(400)
-        .json({ message: "User is not a member of the forum" });
-    }
-
-    // Remove the user from the forum's members array
-    forum.members = forum.members.filter(
-      (memberId) => memberId.toString() !== userId.toString()
-    );
-
-    await forum.save();
-
-    res.status(200).json({
-      message: "Successfully left the forum",
-      forum: forum,
-    });
-  } catch (error) {
-    console.error("Error leaving forum:", error);
-    res
-      .status(500)
-      .json({ message: "Error leaving forum", error: error.message });
-  }
-};
-
 exports.deleteForum = async (req, res) => {
   const { forumId } = req.params;
-  const userId = req.user?.userId;
+  const ownerId = req.user?.id;
+  console.log("forumId", forumId);
 
   try {
-    if (!forumId || !userId) {
+    if (!forumId || !ownerId) {
       return res.status(400).json({ message: "Invalid request" });
     }
 
     // Find the forum by its ID
-    const forum = await Forum.findById(forumId);
+    const forum = await ForumModel.findById(forumId);
     if (!forum) {
       return res.status(404).json({ message: "Forum not found" });
     }
 
     // Check if the user is authorized to delete the forum
-    if (forum.userId.toString() !== userId.toString()) {
+    if (forum.ownerId.toString() !== ownerId.toString()) {
       return res
         .status(403)
         .json({ message: "User is not authorized to delete this forum" });
     }
 
     // Delete the forum
-    await Forum.findByIdAndDelete(forumId);
+    await ForumModel.findByIdAndDelete(forumId);
     res.status(200).json({ message: "Forum deleted successfully" });
   } catch (error) {
     console.error("Error deleting forum:", error);
@@ -134,14 +94,77 @@ exports.deleteForum = async (req, res) => {
   }
 };
 
+/**
+ * Toggle active/inactive status for a forum
+ * @route PATCH /company/forum/:id/toggle-active
+ * @access Private
+ */
+exports.toggleForumActiveStatus = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Find the forum by ID
+    const forum = await ForumModel.findById(id);
+
+    if (!forum) {
+      return sendResponse(res, 404, false, "Forum not found");
+    }
+    forum.isActive = !forum.isActive;
+    await forum.save();
+
+    return sendResponse(res, 200, true, "Forum status updated successfully", {
+      forumId: forum._id,
+      isActive: forum.isActive,
+    });
+  } catch (error) {
+    console.error("Error toggling forum status:", error);
+    return sendResponse(
+      res,
+      500,
+      false,
+      "An error occurred while toggling forum status"
+    );
+  }
+};
+
 exports.getOwnForums = async (req, res) => {
   try {
-    const userId = req.user?.userId;
+    const ownerId = req.user?.id;
+    const { search = "", page = 1, limit = 10 } = req.query;
 
-    // Fetch forums owned by the logged-in user
-    const ownForums = await Forum.find({ userId });
+    // Pagination options
+    const currentPage = parseInt(page, 10) || 1;
+    const perPage = parseInt(limit, 10) || 10;
+    const skip = (currentPage - 1) * perPage;
 
-    res.status(200).json(ownForums);
+    // Build the search query
+    const searchQuery = search
+      ? {
+          forumName: { $regex: search, $options: "i" },
+        }
+      : {};
+
+    // Fetch forums with search and pagination
+    const ownForums = await ForumModel.find({
+      ownerId,
+      ...searchQuery,
+    })
+      .skip(skip)
+      .limit(perPage);
+
+    // Get total count for pagination metadata
+    const totalForums = await ForumModel.countDocuments({
+      ownerId,
+      ...searchQuery,
+    });
+
+    // Response with forums and pagination metadata
+    res.status(200).json({
+      forums: ownForums,
+      total: totalForums,
+      page: currentPage,
+      totalPages: Math.ceil(totalForums / perPage),
+    });
   } catch (error) {
     console.error("Error fetching own forums:", error);
     res
@@ -451,55 +474,9 @@ exports.getForums = async (req, res) => {
   }
 };
 
-// exports.getReceivedRequestsForOwner = async (req, res) => {
-//   try {
-//     const ownerId = req.user.id; // Authenticated owner's ID
-
-//     // Find forums owned by the user
-//     const ownedForums = await ForumModel.find({ ownerId })
-//       .populate([
-//         {
-//           path: "pendingRequests",
-//           select: "_id name email companyDetails",
-//         },
-//       ])
-//       .select(
-//         "forumName forumDescription forumImage objective pendingRequests"
-//       );
-
-//     // Check if the owner has any forums
-//     if (!ownedForums.length) {
-//       return res.status(404).json({
-//         message: "No forums found for this owner",
-//       });
-//     }
-
-//     // Format the response with forums and their pending requests
-//     const formattedRequests = ownedForums.map((forum) => ({
-//       forumId: forum._id,
-//       forumName: forum.forumName,
-//       forumDescription: forum.forumDescription,
-//       forumImage: forum.forumImage,
-//       objective: forum.objective,
-//       pendingRequests: forum.pendingRequests,
-//     }));
-
-//     res.status(200).json({
-//       message: "Received requests for owned forums fetched successfully",
-//       forums: formattedRequests,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching received requests for owner:", error);
-//     res.status(500).json({
-//       message: "Failed to fetch received requests",
-//       error: error.message,
-//     });
-//   }
-// };
-
 exports.getReceivedRequestsForOwner = async (req, res) => {
   try {
-    const ownerId = req.user.id; // Authenticated owner's ID
+    const ownerId = req.user.id;
 
     // Find forums owned by the user
     const ownedForums = await ForumModel.find({ ownerId })
@@ -508,13 +485,9 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
           path: "pendingRequests",
           select: "_id name email companyDetails",
         },
-        {
-          path: "invitedUsers",
-          select: "_id name email companyDetails",
-        },
       ])
       .select(
-        "forumName forumDescription forumImage objective pendingRequests invitedUsers"
+        "forumName forumDescription forumImage objective pendingRequests"
       );
 
     // Check if the owner has any forums
@@ -524,7 +497,7 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
       });
     }
 
-    // Format the response with forums, their pending requests, and invited users
+    // Format the response with forums and their pending requests
     const formattedRequests = ownedForums.map((forum) => ({
       forumId: forum._id,
       forumName: forum.forumName,
@@ -532,18 +505,16 @@ exports.getReceivedRequestsForOwner = async (req, res) => {
       forumImage: forum.forumImage,
       objective: forum.objective,
       pendingRequests: forum.pendingRequests,
-      invitedUsers: forum.invitedUsers,
     }));
 
     res.status(200).json({
-      message:
-        "Received requests and invited users for owned forums fetched successfully",
+      message: "Received requests for owned forums fetched successfully",
       forums: formattedRequests,
     });
   } catch (error) {
     console.error("Error fetching received requests for owner:", error);
     res.status(500).json({
-      message: "Failed to fetch received requests and invited users",
+      message: "Failed to fetch received requests",
       error: error.message,
     });
   }
@@ -853,5 +824,594 @@ exports.leaveForum = async (req, res) => {
     return sendResponse(res, 500, false, "Error leaving forum", {
       error: error.message,
     });
+  }
+};
+
+exports.getOwnerForumInvites = async (req, res) => {
+  try {
+    const userId = req.user.id; // Assuming you have auth middleware setting req.user
+
+    // Find all forums owned by the user
+    const forums = await ForumModel.find({
+      ownerId: userId,
+    }).populate({
+      path: "invitedUsers",
+      select:
+        "name email status profile companyDetails.companyInfo.companyName",
+      model: "Customer",
+    });
+
+    // Transform the data to match UI requirements
+    const formattedForumInvites = forums.map((forum) => ({
+      forumId: forum._id,
+      forumName: forum.forumName,
+      forumDescription: forum.forumDescription,
+      forumImage: forum.forumImage,
+      totalInvites: forum.invitedUsers.length,
+      invitedUsers: forum.invitedUsers.map((user) => ({
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        status: user.status,
+        profileImage: user.profile?.url || null,
+        companyDetails: {
+          companyInfo: {
+            companyName: user.companyDetails?.companyInfo?.companyName || null,
+          },
+        },
+      })),
+    }));
+
+    // Segregate forums based on invite status
+    const segregatedForumInvites = {
+      activeForums: formattedForumInvites.filter(
+        (forum) => forum.totalInvites > 0
+      ),
+      emptyForums: formattedForumInvites.filter(
+        (forum) => forum.totalInvites === 0
+      ),
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalOwnedForums: forums.length,
+        ...segregatedForumInvites,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getOwnerForumInvites:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// Owner Cancels the Request
+exports.cancelForumInvite = async (req, res) => {
+  try {
+    const { forumId, userId } = req.body;
+    const ownerId = req.user.id; // From authentication middleware
+
+    // Find the forum and verify the owner
+    const forum = await ForumModel.findOne({
+      _id: forumId,
+      ownerId: ownerId,
+    });
+
+    if (!forum) {
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found or you are not the owner",
+      });
+    }
+
+    // Remove the user from invitedUsers array
+    await ForumModel.findByIdAndUpdate(forumId, {
+      $pull: { invitedUsers: userId },
+    });
+
+    // // Optionally, you might want to create a notification or log the cancellation
+    // await NotificationModel.create({
+    //   userId: userId,
+    //   type: "FORUM_INVITE_CANCELLED",
+    //   message: `Invitation to forum "${forum.forumName}" has been cancelled`,
+    //   forumId: forumId,
+    // });
+
+    return res.status(200).json({
+      success: true,
+      message: "Forum invitation cancelled successfully",
+    });
+  } catch (error) {
+    console.error("Error cancelling forum invite:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getUserSentRequests = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all forums
+    const allForums = await ForumModel.find({
+      ownerId: { $ne: userId }, // Exclude user's owned forums
+    })
+      .populate("ownerId", "name email companyDetails")
+      .select(
+        "forumName forumDescription objective forumImage isActive createdAt pendingRequests"
+      );
+
+    // Filter forums where user has pending request
+    const forumsWithPendingRequests = allForums.filter((forum) => {
+      return forum.pendingRequests.some(
+        (requestId) => requestId.toString() === userId.toString()
+      );
+    });
+
+    res.status(200).json({
+      success: true,
+      count: forumsWithPendingRequests.length,
+      data: forumsWithPendingRequests,
+    });
+  } catch (error) {
+    console.error("Error fetching user sent requests:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.cancelUserRequest = async (req, res) => {
+  try {
+    const forumId = req.params.forumId;
+    const userId = req.user.id;
+
+    console.log("Attempting to cancel request for:", {
+      forumId,
+      userId,
+    });
+
+    // Find the forum
+    const forum = await ForumModel.findById(forumId);
+    console.log("Forum search result:", forum ? "Found" : "Not Found");
+
+    if (!forum) {
+      console.log("Forum not found for ID:", forumId);
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found",
+      });
+    }
+
+    // Check if user actually has a pending request
+    const hasPendingRequest = forum.pendingRequests.includes(userId);
+    console.log("Pending requests status:", {
+      hasPendingRequest,
+      currentPendingRequests: forum.pendingRequests,
+      searchingForUserId: userId,
+    });
+
+    if (!hasPendingRequest) {
+      console.log("No pending request found for user:", userId);
+      return res.status(400).json({
+        success: false,
+        message: "No pending request found for this forum",
+      });
+    }
+
+    // Remove user from pendingRequests array
+    const originalLength = forum.pendingRequests.length;
+    forum.pendingRequests = forum.pendingRequests.filter(
+      (requestId) => requestId.toString() !== userId.toString()
+    );
+    console.log("Pending requests update:", {
+      beforeLength: originalLength,
+      afterLength: forum.pendingRequests.length,
+      removed: originalLength - forum.pendingRequests.length,
+    });
+
+    await forum.save();
+    console.log("Forum updated successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Forum join request cancelled successfully",
+    });
+  } catch (error) {
+    console.error("Error cancelling forum request:", {
+      error: error.message,
+      stack: error.stack,
+      forumId: req.params.forumId,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getUserReceivedRequests = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all forums where the user is in the invitedUsers array
+    const forumsWithReceivedRequests = await ForumModel.find({
+      invitedUsers: userId,
+      ownerId: { $ne: userId }, // Exclude user's owned forums
+    })
+      .populate("ownerId", "name email companyDetails")
+      .select(
+        "forumName forumDescription objective forumImage isActive createdAt invitedUsers"
+      );
+
+    res.status(200).json({
+      success: true,
+      count: forumsWithReceivedRequests.length,
+      data: forumsWithReceivedRequests,
+    });
+  } catch (error) {
+    console.error("Error fetching user received requests:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getReceivedRequestsForOwner = async (req, res) => {
+  try {
+    const ownerId = req.user.id; // Authenticated owner's ID
+
+    // Find forums owned by the user
+    const ownedForums = await ForumModel.find({ ownerId })
+      .populate([
+        {
+          path: "pendingRequests",
+          select: "_id name email companyDetails",
+        },
+      ])
+      .select(
+        "forumName forumDescription forumImage objective pendingRequests"
+      );
+
+    // Check if the owner has any forums
+    if (!ownedForums.length) {
+      return res.status(404).json({
+        message: "No forums found for this owner",
+      });
+    }
+
+    // Format the response with forums and their pending requests
+    const formattedRequests = ownedForums.map((forum) => ({
+      forumId: forum._id,
+      forumName: forum.forumName,
+      forumDescription: forum.forumDescription,
+      forumImage: forum.forumImage,
+      objective: forum.objective,
+      pendingRequests: forum.pendingRequests,
+    }));
+
+    res.status(200).json({
+      message: "Received requests for owned forums fetched successfully",
+      forums: formattedRequests,
+    });
+  } catch (error) {
+    console.error("Error fetching received requests for owner:", error);
+    res.status(500).json({
+      message: "Failed to fetch received requests",
+      error: error.message,
+    });
+  }
+};
+
+exports.acceptForumInvitation = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { forumId } = req.params;
+
+    // Validate forumId
+    if (!mongoose.Types.ObjectId.isValid(forumId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid forum ID format",
+      });
+    }
+
+    // Find and update the forum
+    const forum = await ForumModel.findOneAndUpdate(
+      {
+        _id: forumId,
+        invitedUsers: userId, // Check if user is actually invited
+        members: { $ne: userId }, // Make sure user isn't already a member
+      },
+      {
+        $pull: { invitedUsers: userId }, // Remove from invitedUsers
+        $addToSet: { members: userId }, // Add to members
+      },
+      { new: true }
+    ).populate("ownerId", "name email companyDetails");
+
+    // If forum not found or user wasn't invited
+    if (!forum) {
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found or no invitation exists",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Forum invitation accepted successfully",
+      data: forum,
+    });
+  } catch (error) {
+    console.error("Error accepting forum invitation:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.rejectForumInvitation = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { forumId } = req.params;
+    const { rejectionReason } = req.body; // Optional rejection reason
+
+    // Validate forumId
+    if (!mongoose.Types.ObjectId.isValid(forumId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid forum ID format",
+      });
+    }
+
+    // Find and update the forum
+    const forum = await ForumModel.findOneAndUpdate(
+      {
+        _id: forumId,
+        invitedUsers: userId, // Check if user is actually invited
+      },
+      {
+        $pull: { invitedUsers: userId }, // Remove from invitedUsers
+        $push: {
+          rejectionReasons: {
+            userId,
+            reason: rejectionReason || "No reason provided",
+            createdAt: new Date(),
+          },
+        },
+      },
+      { new: true }
+    ).populate("ownerId", "name email companyDetails");
+
+    // If forum not found or user wasn't invited
+    if (!forum) {
+      return res.status(404).json({
+        success: false,
+        message: "Forum not found or no invitation exists",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Forum invitation rejected successfully",
+      data: forum,
+    });
+  } catch (error) {
+    console.error("Error rejecting forum invitation:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.getProductsByForumId = async (req, res) => {
+  const { forumId } = req.params;
+  const { page = 1, limit = 10, search = "" } = req.query;
+
+  try {
+    // Fetching messages related to the given forum ID
+    const messages = await Message.find({ forumId });
+
+    // Extracting product IDs from messages
+    const productIds = messages
+      .map((message) => message.productId)
+      .filter(Boolean);
+
+    // Constructing the query to find products
+    let query = { _id: { $in: productIds } };
+    if (search) {
+      query.$or = [
+        {
+          "basicDetails.name": { $regex: search, $options: "i" },
+        },
+        { "ownerId.companyName": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Pagination setup
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Fetching products from the ProductModel
+    const products = await ProductModel.find(query)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const totalCount = await ProductModel.countDocuments(query);
+
+    // Initialize an array to store transformed data
+    const transformedData = [];
+    for (const product of products) {
+      const basicDetails = product.basicDetails || {};
+      const productImages = product.images || [];
+
+      // Fetch company details using ownerId from the CustomerModel
+      const customer = await CustomerModel.findOne(
+        { _id: product.ownerId },
+        "companyDetails.companyInfo.companyName"
+      );
+
+      const companyName =
+        customer?.companyDetails?.companyInfo?.companyName || "Unknown Company";
+
+      // Push the transformed product data to the array
+      transformedData.push({
+        id: product._id,
+        ownerId: product.ownerId || null,
+        productName: basicDetails.name || "Unknown Product",
+        slug: product.basicDetails.slug,
+        brandName: basicDetails.brandName || "Unknown Brand",
+        price: basicDetails.price || "Price not available",
+        description: basicDetails.description || "Description not available",
+        productImage: productImages[0]?.url || "No Image Available",
+        secondaryProductImage: productImages[1]?.url || "No Secondary Image",
+        brandName: companyName || "Unknown Company",
+      });
+    }
+
+    // Sending the response
+    res.status(200).json({
+      products: transformedData,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalCount / parseInt(limit)),
+      totalCount,
+    });
+  } catch (error) {
+    console.error("Error fetching product details:", error.message);
+    if (error instanceof mongoose.Error) {
+      return res
+        .status(400)
+        .json({ error: "Database Error", details: error.message });
+    }
+    res
+      .status(500)
+      .json({ error: "Internal Server Error", details: error.message });
+  }
+};
+
+exports.getParticipantsDetails = async (req, res) => {
+  try {
+    const { forumId } = req.params;
+    const { page = 1, limit = 10, search = "" } = req.query;
+
+    const parsedLimit = parseInt(limit, 10);
+    const parsedPage = parseInt(page, 10);
+    const skip = (parsedPage - 1) * parsedLimit;
+
+    // Retrieve the forum and its members with companyDetails
+    const forum = await ForumModel.findById(forumId).populate({
+      path: "members",
+      model: "Customer",
+      populate: {
+        path: "companyDetails",
+        select: "companyName companyLogo contactInfo companyInfo",
+      },
+    });
+
+    if (!forum) {
+      return sendResponse(res, 404, false, null, "Forum not found");
+    }
+
+    // Retrieve shared messages with product details
+    const sharedMessages = await Message.find({
+      forumId,
+      productId: { $exists: true },
+    }).populate({
+      path: "productId",
+      select: "basicDetails images",
+    });
+
+    // Transform members data with search and pagination
+    const filteredParticipants = forum.members
+      .filter((member) => {
+        const { companyDetails } = member;
+        const companyName = companyDetails?.companyInfo?.companyName || "";
+        const ownerName = companyDetails?.companyInfo?.ownerName || member.name;
+        const email = companyDetails?.contactInfo?.email || "";
+
+        // Check search term in companyName, ownerName, or email
+        return (
+          companyName.toLowerCase().includes(search.toLowerCase()) ||
+          ownerName.toLowerCase().includes(search.toLowerCase()) ||
+          email.toLowerCase().includes(search.toLowerCase())
+        );
+      })
+      .map((member) => {
+        const { _id, name, companyDetails } = member;
+
+        const uniqueProductIds = new Set(); // Track unique product IDs
+
+        const sharedProducts = sharedMessages
+          .filter((msg) => msg.ownerId.toString() === _id.toString())
+          .reduce((acc, msg) => {
+            const productId = msg.productId?._id?.toString();
+            if (!productId || uniqueProductIds.has(productId)) return acc;
+            uniqueProductIds.add(productId); // Mark as seen
+            acc.push({
+              productId,
+              productName: msg.productId?.basicDetails?.name,
+              productSlug: msg.productId?.basicDetails?.slug,
+              productPrice: msg.productId?.basicDetails?.price,
+              productDescription: msg.productId?.basicDetails?.description,
+              productImages: msg.productId?.images?.map((img) => img.url) || [],
+            });
+            return acc;
+          }, []);
+
+        return {
+          user: {
+            userId: _id,
+            companyDetails: {
+              companyName:
+                companyDetails?.companyInfo?.companyName || "Individual User",
+              ownerName: companyDetails?.companyInfo?.ownerName || name,
+              yearEstablished: companyDetails?.companyInfo?.yearEstablishment,
+              businessType: companyDetails?.companyInfo?.businessType,
+              totalEmployees: companyDetails?.companyInfo?.totalEmployees,
+              contactInfo: {
+                pincode: companyDetails?.contactInfo?.pincode,
+                email: companyDetails?.contactInfo?.email,
+                phone: companyDetails?.contactInfo?.phone,
+              },
+              companyLogo: companyDetails?.companyLogo?.url || null,
+            },
+            sharedProducts,
+          },
+        };
+      });
+
+    // Pagination
+    const totalParticipants = filteredParticipants.length;
+    const paginatedParticipants = filteredParticipants.slice(
+      skip,
+      skip + parsedLimit
+    );
+
+    // Response
+    sendResponse(res, 200, true, {
+      totalParticipants,
+      participants: paginatedParticipants,
+    });
+  } catch (error) {
+    console.error("Error in getParticipantsDetails:", error);
+    sendResponse(res, 500, false, null, "Internal Server Error", error.message);
   }
 };
