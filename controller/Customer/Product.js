@@ -1,6 +1,7 @@
 const CustomerModel = require("../../models/Customer");
 const ProductModel = require("../../models/Product");
 const CategoryModel = require("../../models/Category");
+const VisitedLogModel = require("../../models/visitedLog")
 const { sendResponse } = require("../../utils/responseHandler");
 const { default: mongoose } = require("mongoose");
 
@@ -15,6 +16,9 @@ exports.test = async (req, res) => {
 
 exports.getProduct = async (req, res) => {
   const { slug } = req.params;
+  const { latitude, longitude } = req.query
+
+  const userId = "1234"
   try {
     const product = await ProductModel.findOne({
       "basicDetails.slug": slug,
@@ -25,6 +29,35 @@ exports.getProduct = async (req, res) => {
     if (!product) {
       return res.status(400).json({ error: "Product Not Found" });
     }
+    product.totalViews = product.totalViews + 1;
+
+    product.save();
+
+    const visitedLog = await VisitedLogModel.findOne({ "productId": product._id });
+    if (visitedLog) {
+      visitedLog.users.push({
+        coordinates: {
+          latitude,
+          longitude
+        },
+        userId: userId
+      })
+      visitedLog.save();
+    } else {
+      const newVisitedLog = new VisitedLogModel({
+        productId: product._id,
+        users: [{
+          coordinates: {
+            latitude,
+            longitude
+          },
+          userId: userId
+        }]
+
+      })
+      newVisitedLog.save();
+    }
+
     res.status(200).json(product);
   } catch (error) {
     console.error(error);
