@@ -23,6 +23,8 @@ router.post(
   companyProductController.createProduct
 );
 
+router.put("/edit-product/:id", companyVerify, companyProductController.updateProduct);
+
 router.get(
   "/comapny-products/:ownerId",
   // looseVerify,
@@ -56,5 +58,9 @@ router.get(
   // looseVerify,
   companyProductController.getCompanyProducts
 );
+
+router.post("/add-image/:productId", companyVerify, upload.single('image'), companyProductController.addProductImage);
+
+router.delete("/delete-image/:productId/:imageId", companyVerify, companyProductController.deleteProductImage);
 
 module.exports = router;
