@@ -23,7 +23,11 @@ router.post(
   companyProductController.createProduct
 );
 
-router.put("/edit-product/:id", companyVerify, companyProductController.updateProduct);
+router.put(
+  "/edit-product/:id",
+  companyVerify,
+  companyProductController.updateProduct
+);
 
 router.get(
   "/comapny-products/:ownerId",
@@ -59,8 +63,47 @@ router.get(
   companyProductController.getCompanyProducts
 );
 
-router.post("/add-image/:productId", companyVerify, upload.single('image'), companyProductController.addProductImage);
+router.post(
+  "/add-image/:productId",
+  companyVerify,
+  upload.single("image"),
+  companyProductController.addProductImage
+);
 
-router.delete("/delete-image/:productId/:imageId", companyVerify, companyProductController.deleteProductImage);
+router.delete(
+  "/delete-image/:productId/:imageId",
+  companyVerify,
+  companyProductController.deleteProductImage
+);
+
+router.get(
+  "/getTotalViewsAndNewVisits",
+  companyVerify,
+  companyProductController.getTotalViewsAndNewVisits
+);
+
+router.get(
+  "/getSingleProductViewsAndVisits/:productId",
+  companyVerify,
+  companyProductController.getSingleProductViewsAndVisits
+);
+
+router.get(
+  "/getVisitorInsights",
+  companyVerify,
+  companyProductController.getVisitorInsights
+);
+
+router.get(
+  "/getOwnerProductViewLocations",
+  companyVerify,
+  companyProductController.getOwnerProductViewLocations
+);
+
+router.get(
+  "/product-names",
+  companyVerify,
+  companyProductController.getProductNames
+);
 
 module.exports = router;

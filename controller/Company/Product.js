@@ -3,7 +3,9 @@ const CustomerModel = require("../../models/Customer");
 const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 const CategoryModel = require("../../models/Category");
+const VisitedLogModel = require("../../models/visitedLog");
 const mongoose = require("mongoose");
+const visitedLog = require("../../models/visitedLog");
 
 /**
  *  Function to check the API is working
@@ -75,7 +77,7 @@ const createProduct = async (req, res) => {
       dynamicSteps: formData.dynamicSteps.steps,
       category: {
         categoryId: formData.category.categoryId,
-        subCategoryId: formData.category.subCategoryId
+        subCategoryId: formData.category.subCategoryId,
       },
       opportunities: formData.opportunities,
     });
@@ -89,15 +91,15 @@ const createProduct = async (req, res) => {
 };
 
 const updateProduct = async (req, res) => {
-  console.log("hi")
+  console.log("hi");
   try {
     const productId = req.params.id;
 
-    const formData = req.body.formData
+    const formData = req.body.formData;
     const ownerId = req.user.id;
 
-    console.log("id", productId)
-    console.log(formData)
+    console.log("id", productId);
+    console.log(formData);
 
     if (!ownerId) {
       return sendResponse(res, 500, true, "User ID Not Found");
@@ -146,7 +148,7 @@ const updateProduct = async (req, res) => {
         attributes: formData.attributes,
         category: {
           categoryId: formData.category.categoryId,
-          subCategoryId: formData.category.subCategoryId
+          subCategoryId: formData.category.subCategoryId,
         },
         dynamicSteps: formData.dynamicSteps,
         opportunities: formData.opportunities,
@@ -154,7 +156,13 @@ const updateProduct = async (req, res) => {
       { new: true } // Returns the updated document
     );
 
-    sendResponse(res, 200, true, "Product updated successfully", updatedProduct);
+    sendResponse(
+      res,
+      200,
+      true,
+      "Product updated successfully",
+      updatedProduct
+    );
   } catch (error) {
     console.error("Error updating product:", error);
     sendResponse(res, 500, false, "Error updating product", {
@@ -500,7 +508,7 @@ const addProductImage = async (req, res) => {
     // Add new image to product
     const newImage = {
       url,
-      publicId: filename
+      publicId: filename,
     };
 
     product.images.push(newImage);
@@ -509,9 +517,8 @@ const addProductImage = async (req, res) => {
     sendResponse(res, 200, true, "Image added successfully", {
       _id: product.images[product.images.length - 1]._id,
       url,
-      publicId: filename
+      publicId: filename,
     });
-
   } catch (error) {
     console.error("Error adding product image:", error);
     sendResponse(res, 500, false, "Error adding product image", {
@@ -527,7 +534,7 @@ const addProductImage = async (req, res) => {
  */
 const deleteProductImage = async (req, res) => {
   try {
-    console.log("hi")
+    console.log("hi");
     const { productId, imageId } = req.params;
     const ownerId = req.user.id;
 
@@ -551,11 +558,499 @@ const deleteProductImage = async (req, res) => {
     await product.save();
 
     sendResponse(res, 200, true, "Image deleted successfully");
-
   } catch (error) {
     console.error("Error deleting product image:", error);
     sendResponse(res, 500, false, "Error deleting product image", {
       details: error.message,
+    });
+  }
+};
+
+const getTotalViewsAndNewVisits = async (req, res) => {
+  try {
+    // Get the ownerId from the authenticated user
+    const ownerId = req.user.id;
+
+    // Get all products owned by this user
+    const products = await ProductModel.find({ ownerId });
+
+    // Calculate total views from all products
+    const totalViews = products.reduce(
+      (sum, product) => sum + (product.totalViews || 0),
+      0
+    );
+
+    // Get product IDs for visited logs query
+    const productIds = products.map((product) => product._id);
+
+    // Get visited logs for all products
+    const visitedLogs = await VisitedLogModel.find({
+      productId: { $in: productIds },
+    });
+
+    // Count unique visitors (new visits), excluding the owner
+    const uniqueUsers = new Set();
+    visitedLogs.forEach((log) => {
+      log.users.forEach((user) => {
+        // Only add to uniqueUsers if the user is not the owner
+        if (user.userId && user.userId.toString() !== ownerId.toString()) {
+          uniqueUsers.add(user.userId.toString());
+        }
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalViews,
+        newVisits: uniqueUsers.size,
+        totalProducts: products.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error getting views and visits:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch product statistics",
+      error: error.message,
+    });
+  }
+};
+
+const getSingleProductViewsAndVisits = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const ownerId = req.user.id;
+
+    // Get the product and verify ownership
+    const product = await ProductModel.findOne({ _id: productId, ownerId });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found or unauthorized",
+      });
+    }
+
+    // Get total views from the product
+    const totalViews = product.totalViews || 0;
+
+    // Get visited logs for this product
+    const visitedLog = await VisitedLogModel.findOne({
+      productId: product._id,
+    });
+
+    // Count unique visitors (new visits)
+    const uniqueUsers = new Set();
+    if (visitedLog) {
+      visitedLog.users.forEach((user) => {
+        if (user.userId) {
+          uniqueUsers.add(user.userId.toString());
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        productName: product.basicDetails.name,
+        totalViews,
+        newVisits: uniqueUsers.size,
+        // You can add more product-specific details here if needed
+      },
+    });
+  } catch (error) {
+    console.error("Error getting single product statistics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch product statistics",
+      error: error.message,
+    });
+  }
+};
+
+const getVisitorInsights = async (req, res) => {
+  try {
+    const { timeRange = "week" } = req.query;
+    const userId = req.user.id;
+
+    // Calculate date range
+    const endDate = new Date();
+    let startDate = new Date();
+
+    switch (timeRange) {
+      case "week":
+        startDate.setDate(endDate.getDate() - 6);
+        break;
+      case "month":
+        startDate.setDate(endDate.getDate() - 29);
+        break;
+      case "year":
+        startDate.setMonth(endDate.getMonth() - 11);
+        break;
+      default:
+        startDate.setDate(endDate.getDate() - 6);
+    }
+
+    // First, get all products owned by the user
+    const userProducts = await ProductModel.find(
+      { ownerId: userId },
+      { _id: 1, totalViews: 1 }
+    );
+
+    const productIds = userProducts.map((product) => product._id);
+
+    // Generate date labels
+    const labels = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      labels.push(currentDate.toISOString().split("T")[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Aggregate visitor data
+    const visitorStats = await VisitedLogModel.aggregate([
+      {
+        $match: {
+          productId: { $in: productIds },
+          "users.time": { $gte: startDate, $lte: endDate },
+        },
+      },
+      {
+        $unwind: "$users",
+      },
+      {
+        $match: {
+          "users.time": { $gte: startDate, $lte: endDate },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            date: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$users.time",
+              },
+            },
+            productId: "$productId",
+          },
+          dailyVisits: { $sum: 1 },
+          uniqueVisitors: { $addToSet: "$users.userId" },
+          locations: {
+            $addToSet: "$users.coordinates",
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.date",
+          totalVisits: { $sum: "$dailyVisits" },
+          uniqueVisitors: { $addToSet: "$uniqueVisitors" },
+          locations: { $push: "$locations" },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+    ]);
+
+    // Process the data
+    const processedData = {
+      newVisits: new Array(labels.length).fill(0),
+      totalVisits: new Array(labels.length).fill(0),
+      locations: new Set(),
+    };
+
+    // Map the aggregated data to our arrays
+    visitorStats.forEach((stat) => {
+      const index = labels.indexOf(stat._id);
+      if (index !== -1) {
+        processedData.newVisits[index] = stat.uniqueVisitors.flat().length;
+        processedData.totalVisits[index] = stat.totalVisits;
+
+        // Fixed location processing
+        stat.locations.forEach((location) => {
+          if (location && location.locationDetails) {
+            const locationData = {
+              city: location.locationDetails.city,
+              state: location.locationDetails.state,
+              coordinates: {
+                latitude: location.latitude,
+                longitude: location.longitude,
+              },
+            };
+            if (locationData.city && locationData.coordinates.latitude) {
+              processedData.locations.add(JSON.stringify(locationData));
+            }
+          }
+        });
+      }
+    });
+
+    // Calculate total views from products
+    const totalProductViews = userProducts.reduce(
+      (sum, product) => sum + (product.totalViews || 0),
+      0
+    );
+
+    // Prepare the response
+    const response = {
+      success: true,
+      data: {
+        analyticsData: {
+          labels,
+          datasets: [
+            {
+              newVisits: processedData.newVisits,
+              totalVisits: processedData.totalVisits,
+            },
+          ],
+          summary: {
+            totalVisits: totalProductViews,
+            totalUniqueVisits: new Set(
+              visitorStats.flatMap((stat) => stat.uniqueVisitors.flat())
+            ).size,
+          },
+        },
+        locationData: Array.from(processedData.locations).map((loc) =>
+          JSON.parse(loc)
+        ),
+      },
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error("Error fetching visitor insights:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching visitor insights",
+      error: error.message,
+    });
+  }
+};
+
+// const getOwnerProductViewLocations = async (req, res) => {
+//   try {
+//     const ownerId = req.user.id;
+
+//     // Convert ownerId to ObjectId
+//     const ownerObjectId = new mongoose.Types.ObjectId(ownerId);
+
+//     // First, find all products owned by the user
+//     const ownedProducts = await ProductModel.find({ ownerId: ownerObjectId });
+
+//     // Extract product IDs
+//     const ownedProductIds = ownedProducts.map((product) => product._id);
+
+//     console.log("Owned Product IDs:", ownedProductIds);
+//     console.log("Number of Owned Products:", ownedProductIds.length);
+
+//     // Aggregate view locations for owned products
+//     const viewData = await VisitedLogModel.aggregate([
+//       {
+//         $match: {
+//           productId: { $in: ownedProductIds },
+//         },
+//       },
+//       {
+//         $unwind: {
+//           path: "$users",
+//           preserveNullAndEmptyArrays: true,
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: "products",
+//           localField: "productId",
+//           foreignField: "_id",
+//           as: "product",
+//         },
+//       },
+//       { $unwind: "$product" },
+//       {
+//         $group: {
+//           _id: {
+//             productId: "$productId",
+//             city: "$users.coordinates.locationDetails.city",
+//             latitude: "$users.coordinates.latitude",
+//             longitude: "$users.coordinates.longitude",
+//             state: "$users.coordinates.locationDetails.state",
+//           },
+//           count: { $sum: 1 },
+//           lastViewed: { $max: "$users.time" },
+//           productName: { $first: "$product.name" },
+//         },
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           productId: "$_id.productId",
+//           productName: 1,
+//           city: "$_id.city",
+//           state: "$_id.state",
+//           latitude: "$_id.latitude",
+//           longitude: "$_id.longitude",
+//           viewCount: "$count",
+//           lastViewed: 1,
+//         },
+//       },
+//     ]);
+
+//     console.log("View Data:", viewData);
+
+//     res.status(200).json({
+//       success: true,
+//       data: viewData,
+//       ownedProductsCount: ownedProducts.length,
+//     });
+//   } catch (error) {
+//     console.error("Owner product view locations error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Error fetching owner product view locations",
+//       error: error.message,
+//     });
+//   }
+// };
+
+const getOwnerProductViewLocations = async (req, res) => {
+  try {
+    const ownerId = req.user.id;
+
+    // Convert ownerId to ObjectId
+    const ownerObjectId = new mongoose.Types.ObjectId(ownerId);
+
+    // First, find all products owned by the user with their names
+    const ownedProducts = await ProductModel.find(
+      { ownerId: ownerObjectId },
+      "_id name"
+    );
+
+    // Extract product IDs
+    const ownedProductIds = ownedProducts.map((product) => product._id);
+
+    console.log("Owned Product IDs:", ownedProductIds);
+    console.log("Number of Owned Products:", ownedProductIds.length);
+
+    // Aggregate view locations for owned products
+    const viewData = await VisitedLogModel.aggregate([
+      {
+        $match: {
+          productId: { $in: ownedProductIds },
+        },
+      },
+      {
+        $unwind: {
+          path: "$users",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "productId",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: "$product" },
+      {
+        $group: {
+          _id: {
+            productId: "$productId",
+            city: "$users.coordinates.locationDetails.city",
+            latitude: "$users.coordinates.latitude",
+            longitude: "$users.coordinates.longitude",
+            state: "$users.coordinates.locationDetails.state",
+          },
+          count: { $sum: 1 },
+          lastViewed: { $max: "$users.time" },
+          productName: { $first: "$product.name" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          productId: "$_id.productId",
+          productName: 1,
+          city: "$_id.city",
+          state: "$_id.state",
+          latitude: "$_id.latitude",
+          longitude: "$_id.longitude",
+          viewCount: "$count",
+          lastViewed: 1,
+        },
+      },
+    ]);
+
+    console.log("View Data:", viewData);
+
+    // Create a map of product names for easy reference
+    const productNames = ownedProducts.reduce((acc, product) => {
+      acc[product._id.toString()] = product.name;
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      success: true,
+      data: viewData,
+      ownedProductsCount: ownedProducts.length,
+      productNames: productNames, // Add this for frontend to map product IDs to names
+    });
+  } catch (error) {
+    console.error("Owner product view locations error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching owner product view locations",
+      error: error.message,
+    });
+  }
+};
+
+// controllers/companyProductController.js
+
+const getProductNames = async (req, res) => {
+  try {
+    // Get product IDs from query string and parse them
+    const productIds = req.query.productIds.split(",");
+
+    // Validate if we have product IDs
+    if (!productIds || productIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No product IDs provided",
+      });
+    }
+
+    // Find products with the given IDs
+    const products = await ProductModel.find(
+      {
+        _id: { $in: productIds },
+        ownerId: req.user.id, // Make sure this matches your model's field
+      },
+      {
+        "basicDetails.name": 1,
+        _id: 1,
+      }
+    );
+
+    // Create a map of productId to product name
+    const productNames = products.reduce((acc, product) => {
+      acc[product._id.toString()] = product.basicDetails.name;
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      success: true,
+      data: productNames,
+    });
+  } catch (error) {
+    console.error("Error fetching product names:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product names",
+      error: error.message,
     });
   }
 };
@@ -571,5 +1066,10 @@ module.exports = {
   getCompanyProducts,
   updateProduct,
   addProductImage,
-  deleteProductImage
+  deleteProductImage,
+  getTotalViewsAndNewVisits,
+  getSingleProductViewsAndVisits,
+  getVisitorInsights,
+  getOwnerProductViewLocations,
+  getProductNames,
 };
