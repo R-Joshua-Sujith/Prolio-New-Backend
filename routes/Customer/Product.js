@@ -14,4 +14,6 @@ router.get(
 
 router.get("/all-Products", customerProductController.getAllProducts);
 
+router.get("/get-search-products", customerProductController.getSearchProducts);
+
 module.exports = router;

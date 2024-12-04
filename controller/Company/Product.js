@@ -5,6 +5,7 @@ const { sendResponse } = require("../../utils/responseHandler");
 const CategoryModel = require("../../models/Category");
 const VisitedLogModel = require("../../models/visitedLog");
 const mongoose = require("mongoose");
+const { createLogs } = require("./Log");
 const visitedLog = require("../../models/visitedLog");
 
 /**
@@ -81,6 +82,7 @@ const createProduct = async (req, res) => {
       },
       opportunities: formData.opportunities,
     });
+
     sendResponse(res, 201, true, "Product created successfully", newProduct);
   } catch (error) {
     console.error("Error creating product:", error);
@@ -153,9 +155,18 @@ const updateProduct = async (req, res) => {
         dynamicSteps: formData.dynamicSteps,
         opportunities: formData.opportunities,
       },
-      { new: true } // Returns the updated document
+      { new: true }
     );
 
+    const logData = {
+      userId: req.user.id,
+      userModel: "Customer",
+      targetId: productId,
+      targetModel: "Product",
+      action: `PRODUCT_UPDATED`,
+    };
+
+    createLogs(logData);
     sendResponse(
       res,
       200,
@@ -257,10 +268,9 @@ const checkSlugUnique = async (req, res) => {
 
 const getAllCompanyProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit = 10, searchTerm = "" } = req.query;
 
-    const ownerId = req.user.id; // Get ownerId from route parameters
-    // Or if you're passing it in query: const { ownerId } = req.query;
+    const ownerId = req.user?.id;
 
     // Convert page and limit to numbers
     const pageNum = parseInt(page);
@@ -268,19 +278,20 @@ const getAllCompanyProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Build query object with ownerId
-    let query = { ownerId }; // Add ownerId to base query
+    let query = { ownerId }; // Base query with ownerId
 
     // Search functionality
-    if (search) {
+    if (searchTerm) {
       query.$and = [
-        // Use $and to combine ownerId and search conditions
-        { ownerId },
+        { ownerId }, // Ensure ownerId is always part of the query
         {
           $or: [
-            { "basicDetails.name": { $regex: search, $options: "i" } },
-            { "basicDetails.id": { $regex: search, $options: "i" } },
-            { "basicDetails.slug": { $regex: search, $options: "i" } },
-            { "basicDetails.description": { $regex: search, $options: "i" } },
+            { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
+            { "basicDetails.id": { $regex: searchTerm, $options: "i" } },
+            { "basicDetails.slug": { $regex: searchTerm, $options: "i" } },
+            {
+              "basicDetails.description": { $regex: searchTerm, $options: "i" },
+            },
           ],
         },
       ];
@@ -288,8 +299,8 @@ const getAllCompanyProducts = async (req, res) => {
 
     // Execute query with pagination
     const products = await ProductModel.find(query)
-      .select("basicDetails images") // Only select the fields we need
-      .sort({ createdAt: -1 }) // Sort by newest first
+      .select("basicDetails images") // Select only the needed fields
+      .sort({ createdAt: -1 }) // Sort by creation date
       .skip(skip)
       .limit(limitNum);
 
@@ -305,7 +316,7 @@ const getAllCompanyProducts = async (req, res) => {
       slug: product.basicDetails.slug,
       price: product.basicDetails.price,
       description: product.basicDetails.description,
-      image: product.images[0]?.url || null, // Get only the first image URL
+      image: product.images[0]?.url || null, // Get the first image URL
     }));
 
     sendResponse(res, 200, true, "Products fetched successfully", {
@@ -325,6 +336,7 @@ const getAllCompanyProducts = async (req, res) => {
     });
   }
 };
+
 const getProductById = async (req, res) => {
   console.log("hi");
   try {
@@ -1009,7 +1021,6 @@ const getOwnerProductViewLocations = async (req, res) => {
 };
 
 // controllers/companyProductController.js
-
 const getProductNames = async (req, res) => {
   try {
     // Get product IDs from query string and parse them
