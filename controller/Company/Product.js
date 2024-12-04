@@ -4,7 +4,7 @@ const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 const CategoryModel = require("../../models/Category");
 const mongoose = require("mongoose");
-
+const { createLogs } = require("./Log");
 /**
  *  Function to check the API is working
  */
@@ -75,10 +75,11 @@ const createProduct = async (req, res) => {
       dynamicSteps: formData.dynamicSteps.steps,
       category: {
         categoryId: formData.category.categoryId,
-        subCategoryId: formData.category.subCategoryId
+        subCategoryId: formData.category.subCategoryId,
       },
       opportunities: formData.opportunities,
     });
+
     sendResponse(res, 201, true, "Product created successfully", newProduct);
   } catch (error) {
     console.error("Error creating product:", error);
@@ -89,15 +90,15 @@ const createProduct = async (req, res) => {
 };
 
 const updateProduct = async (req, res) => {
-  console.log("hi")
+  console.log("hi");
   try {
     const productId = req.params.id;
 
-    const formData = req.body.formData
+    const formData = req.body.formData;
     const ownerId = req.user.id;
 
-    console.log("id", productId)
-    console.log(formData)
+    console.log("id", productId);
+    console.log(formData);
 
     if (!ownerId) {
       return sendResponse(res, 500, true, "User ID Not Found");
@@ -146,15 +147,30 @@ const updateProduct = async (req, res) => {
         attributes: formData.attributes,
         category: {
           categoryId: formData.category.categoryId,
-          subCategoryId: formData.category.subCategoryId
+          subCategoryId: formData.category.subCategoryId,
         },
         dynamicSteps: formData.dynamicSteps,
         opportunities: formData.opportunities,
       },
-      { new: true } // Returns the updated document
+      { new: true }
     );
 
-    sendResponse(res, 200, true, "Product updated successfully", updatedProduct);
+    const logData = {
+      userId: req.user.id,
+      userModel: "Customer",
+      targetId: productId,
+      targetModel: "Product",
+      action: `PRODUCT_UPDATED`,
+    };
+
+    createLogs(logData);
+    sendResponse(
+      res,
+      200,
+      true,
+      "Product updated successfully",
+      updatedProduct
+    );
   } catch (error) {
     console.error("Error updating product:", error);
     sendResponse(res, 500, false, "Error updating product", {
@@ -249,10 +265,9 @@ const checkSlugUnique = async (req, res) => {
 
 const getAllCompanyProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit = 10, searchTerm = "" } = req.query;
 
-    const ownerId = req.user.id; // Get ownerId from route parameters
-    // Or if you're passing it in query: const { ownerId } = req.query;
+    const ownerId = req.user?.id;
 
     // Convert page and limit to numbers
     const pageNum = parseInt(page);
@@ -260,19 +275,18 @@ const getAllCompanyProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Build query object with ownerId
-    let query = { ownerId }; // Add ownerId to base query
+    let query = { ownerId }; // Base query with ownerId
 
     // Search functionality
-    if (search) {
+    if (searchTerm) {
       query.$and = [
-        // Use $and to combine ownerId and search conditions
-        { ownerId },
+        { ownerId }, // Ensure ownerId is always part of the query
         {
           $or: [
-            { "basicDetails.name": { $regex: search, $options: "i" } },
-            { "basicDetails.id": { $regex: search, $options: "i" } },
-            { "basicDetails.slug": { $regex: search, $options: "i" } },
-            { "basicDetails.description": { $regex: search, $options: "i" } },
+            { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
+            { "basicDetails.id": { $regex: searchTerm, $options: "i" } },
+            { "basicDetails.slug": { $regex: searchTerm, $options: "i" } },
+            { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
           ],
         },
       ];
@@ -280,8 +294,8 @@ const getAllCompanyProducts = async (req, res) => {
 
     // Execute query with pagination
     const products = await ProductModel.find(query)
-      .select("basicDetails images") // Only select the fields we need
-      .sort({ createdAt: -1 }) // Sort by newest first
+      .select("basicDetails images") // Select only the needed fields
+      .sort({ createdAt: -1 }) // Sort by creation date
       .skip(skip)
       .limit(limitNum);
 
@@ -297,7 +311,7 @@ const getAllCompanyProducts = async (req, res) => {
       slug: product.basicDetails.slug,
       price: product.basicDetails.price,
       description: product.basicDetails.description,
-      image: product.images[0]?.url || null, // Get only the first image URL
+      image: product.images[0]?.url || null, // Get the first image URL
     }));
 
     sendResponse(res, 200, true, "Products fetched successfully", {
@@ -317,6 +331,7 @@ const getAllCompanyProducts = async (req, res) => {
     });
   }
 };
+
 const getProductById = async (req, res) => {
   console.log("hi");
   try {
@@ -500,7 +515,7 @@ const addProductImage = async (req, res) => {
     // Add new image to product
     const newImage = {
       url,
-      publicId: filename
+      publicId: filename,
     };
 
     product.images.push(newImage);
@@ -509,9 +524,8 @@ const addProductImage = async (req, res) => {
     sendResponse(res, 200, true, "Image added successfully", {
       _id: product.images[product.images.length - 1]._id,
       url,
-      publicId: filename
+      publicId: filename,
     });
-
   } catch (error) {
     console.error("Error adding product image:", error);
     sendResponse(res, 500, false, "Error adding product image", {
@@ -527,7 +541,7 @@ const addProductImage = async (req, res) => {
  */
 const deleteProductImage = async (req, res) => {
   try {
-    console.log("hi")
+    console.log("hi");
     const { productId, imageId } = req.params;
     const ownerId = req.user.id;
 
@@ -551,7 +565,6 @@ const deleteProductImage = async (req, res) => {
     await product.save();
 
     sendResponse(res, 200, true, "Image deleted successfully");
-
   } catch (error) {
     console.error("Error deleting product image:", error);
     sendResponse(res, 500, false, "Error deleting product image", {
@@ -571,5 +584,5 @@ module.exports = {
   getCompanyProducts,
   updateProduct,
   addProductImage,
-  deleteProductImage
+  deleteProductImage,
 };

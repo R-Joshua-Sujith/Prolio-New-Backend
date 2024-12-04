@@ -2,7 +2,8 @@ const CustomerModel = require("../../models/Customer");
 const ProductModel = require("../../models/Product");
 const CategoryModel = require("../../models/Category");
 const { sendResponse } = require("../../utils/responseHandler");
-const { default: mongoose } = require("mongoose");
+const EnquiryModel = require("../../models/Enquiry");
+const mongoose = require("mongoose");
 
 exports.test = async (req, res) => {
   try {
@@ -16,16 +17,31 @@ exports.test = async (req, res) => {
 exports.getProduct = async (req, res) => {
   const { slug } = req.params;
   try {
+    // Find the product by slug
     const product = await ProductModel.findOne({
       "basicDetails.slug": slug,
     }).populate(
       "ownerId",
       "companyDetails.companyInfo companyDetails.contactInfo"
     );
+
     if (!product) {
       return res.status(400).json({ error: "Product Not Found" });
     }
-    res.status(200).json(product);
+
+    // Check for an existing enquiry for this product by the logged-in user (req.user)
+    const enquiry = await EnquiryModel.findOne({
+      productId: product._id,
+      customerId: req.user?.id,
+    });
+
+    // Prepare response data
+    const responseData = {
+      product,
+      enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
+    };
+
+    res.status(200).json(responseData);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -33,6 +49,117 @@ exports.getProduct = async (req, res) => {
 };
 
 exports.getAllProducts = async (req, res) => {
+  try {
+    const {
+      searchTerm = "",
+      page = 1,
+      limit = 10,
+      category,
+      subcategory,
+      userId,
+    } = req.query;
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build query with more efficient filtering
+    const query = {};
+
+    // More efficient search using text index
+    if (searchTerm) {
+      query.$text = { $search: searchTerm };
+    }
+
+    if (category) {
+      query["category.categoryId"] = category;
+    }
+
+    if (subcategory) {
+      query["category.subCategoryId"] = subcategory;
+    }
+
+    // Perform parallel database operations
+    const [products, totalProducts, allCategories] = await Promise.all([
+      ProductModel.find(query)
+        .select("basicDetails images category ownerId companyId")
+        .populate({
+          path: "ownerId",
+          select: "companyDetails.companyInfo.companyName",
+        })
+        .skip(skip)
+        .limit(limitNum),
+
+      ProductModel.countDocuments(query),
+
+      CategoryModel.find({}, "categoryName subCategories"),
+    ]);
+
+    // Create efficient maps for category lookup
+    const categoryMap = new Map(
+      allCategories.flatMap((category) => [
+        [category._id.toString(), category.categoryName],
+        ...category.subCategories.map((sub) => [sub._id.toString(), sub.name]),
+      ])
+    );
+
+    // Skip fetching enquiries if userId is invalid or not provided
+    let enquiryMap = new Map();
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      // Bulk fetch enquiries and optimize processing
+      const productIds = products.map((product) => product._id);
+      const enquiries = await EnquiryModel.find({
+        productId: { $in: productIds },
+        customerId: userId,
+      });
+
+      enquiryMap = new Map(
+        enquiries.map((enquiry) => [
+          enquiry.productId.toString(),
+          enquiry.status,
+        ])
+      );
+    }
+
+    // Transform products more efficiently
+    const transformedData = products.map((product) => ({
+      id: product._id,
+      userId: product.ownerId?._id,
+      companyId: product.companyId?._id,
+      productName: product.basicDetails?.name || "Unknown Product",
+      slug: product.basicDetails?.slug,
+      brandName:
+        product.ownerId?.companyDetails?.companyInfo?.companyName ||
+        "Unknown Company",
+      price: product.basicDetails?.price || "Price not available",
+      productImage: product.images?.[0]?.url || "No Image Available",
+      secondaryImage: product.images?.[1]?.url || "No Secondary Image",
+      thirdImage: product.images?.[2]?.url || "No Third Image",
+      fourthImage: product.images?.[3]?.url || "No Fourth Image",
+      category:
+        categoryMap.get(product.category.categoryId?.toString()) ||
+        "Unknown Category",
+      subcategory:
+        categoryMap.get(product.category.subCategoryId?.toString()) ||
+        "Unknown Subcategory",
+      enquiryStatus: enquiryMap.get(product._id.toString()) || "Not Enquired",
+    }));
+
+    return sendResponse(res, 200, "Products fetched successfully", {
+      products: transformedData,
+      totalItems: totalProducts,
+      totalPages: Math.ceil(totalProducts / limitNum),
+    });
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    return sendResponse(res, 500, "Internal Server Error", {
+      details: error.message,
+    });
+  }
+};
+
+
+exports.getSearchProducts = async (req, res) => {
   try {
     const {
       searchTerm = "",
