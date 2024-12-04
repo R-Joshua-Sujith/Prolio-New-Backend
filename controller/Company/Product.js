@@ -5,12 +5,9 @@ const { sendResponse } = require("../../utils/responseHandler");
 const CategoryModel = require("../../models/Category");
 const VisitedLogModel = require("../../models/visitedLog");
 const mongoose = require("mongoose");
-<<<<<<< HEAD
 const { createLogs } = require("./Log");
-=======
 const visitedLog = require("../../models/visitedLog");
 
->>>>>>> fef9ba7eaa563a68c50a1d854a3424e6632157e3
 /**
  *  Function to check the API is working
  */
@@ -161,7 +158,6 @@ const updateProduct = async (req, res) => {
       { new: true }
     );
 
-<<<<<<< HEAD
     const logData = {
       userId: req.user.id,
       userModel: "Customer",
@@ -171,8 +167,6 @@ const updateProduct = async (req, res) => {
     };
 
     createLogs(logData);
-=======
->>>>>>> fef9ba7eaa563a68c50a1d854a3424e6632157e3
     sendResponse(
       res,
       200,
@@ -295,7 +289,9 @@ const getAllCompanyProducts = async (req, res) => {
             { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
             { "basicDetails.id": { $regex: searchTerm, $options: "i" } },
             { "basicDetails.slug": { $regex: searchTerm, $options: "i" } },
-            { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
+            {
+              "basicDetails.description": { $regex: searchTerm, $options: "i" },
+            },
           ],
         },
       ];
@@ -1025,7 +1021,6 @@ const getOwnerProductViewLocations = async (req, res) => {
 };
 
 // controllers/companyProductController.js
-
 const getProductNames = async (req, res) => {
   try {
     // Get product IDs from query string and parse them
@@ -1083,12 +1078,9 @@ module.exports = {
   updateProduct,
   addProductImage,
   deleteProductImage,
-<<<<<<< HEAD
-=======
   getTotalViewsAndNewVisits,
   getSingleProductViewsAndVisits,
   getVisitorInsights,
   getOwnerProductViewLocations,
   getProductNames,
->>>>>>> fef9ba7eaa563a68c50a1d854a3424e6632157e3
 };
