@@ -1,10 +1,16 @@
 const CustomerModel = require("../../models/Customer");
 const ProductModel = require("../../models/Product");
 const CategoryModel = require("../../models/Category");
+const VisitedLogModel = require("../../models/visitedLog");
+const { saveVisitedLogs } = require("./Helpers/GeoLocation");
 const { sendResponse } = require("../../utils/responseHandler");
 const EnquiryModel = require("../../models/Enquiry");
 const mongoose = require("mongoose");
 
+const jwt = require("jsonwebtoken");
+const dotenv = require("dotenv");
+
+dotenv.config();
 exports.test = async (req, res) => {
   try {
     res.status(200).json({ message: "Product Success" });
@@ -16,6 +22,9 @@ exports.test = async (req, res) => {
 
 exports.getProduct = async (req, res) => {
   const { slug } = req.params;
+  const { latitude, longitude } = req.query;
+
+  const userId = req.user.id;
   try {
     // Find the product by slug
     const product = await ProductModel.findOne({
@@ -41,6 +50,7 @@ exports.getProduct = async (req, res) => {
       enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
     };
 
+    saveVisitedLogs(latitude, longitude, userId, product._id);
     res.status(200).json(responseData);
   } catch (error) {
     console.error(error);

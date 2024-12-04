@@ -2,6 +2,7 @@ const OpportunityModel = require("../../models/Opportunity");
 const CustomerModel = require("../../models/Customer");
 const ProductModel = require("../../models/Product");
 const mongoose = require("mongoose");
+const { sendResponse } = require("../../utils/responseHandler");
 
 // View Opportunity for specific Producct
 const viewProductOpportunities = async (req, res) => {
@@ -429,10 +430,68 @@ const getAllOpportunitiesForUser = async (req, res) => {
   }
 };
 
+const getPendingOpportunitiesByRole = async (req, res) => {
+  try {
+    const ownerId = req.user?.id;
+    const ownerObjectId = new mongoose.Types.ObjectId(ownerId);
+
+    // Get statistics for opportunities
+    const statistics = await OpportunityModel.aggregate([
+      {
+        $match: {
+          ownerId: ownerObjectId,
+          status: "Processing"
+        }
+      },
+      {
+        $group: {
+          _id: "$opportunity_role",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Format the response data
+    const roleWisePending = {};
+    let totalPendingRequests = 0;
+
+    // Use _id instead of role since _id contains the opportunity_role value
+    statistics.forEach(stat => {
+      roleWisePending[stat._id] = stat.count;
+      totalPendingRequests += stat.count;
+    });
+
+    const data = {
+      totalPendingRequests,
+      roleWisePending,
+      availableRoles: Object.keys(roleWisePending)
+    };
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Pending opportunities by role fetched successfully",
+      data
+    );
+
+  } catch (error) {
+    console.error("Error in getPendingOpportunitiesByRole:", error);
+    return sendResponse(
+      res,
+      500,
+      false,
+      null,
+      error.message || "Error fetching pending opportunities"
+    );
+  }
+};
+
 module.exports = {
   viewProductOpportunities,
   viewSingleOpportunityOwner,
   updateOpportunityStatus,
   getOpportunityCountsByOwner,
   getAllOpportunitiesForUser,
+  getPendingOpportunitiesByRole,
 };
