@@ -37,4 +37,10 @@ router.get(
   companyOpportunityController.getAllOpportunitiesForUser
 );
 
+router.get(
+  "/get-pending-opportunities-by-role",
+  companyVerify,
+  companyOpportunityController.getPendingOpportunitiesByRole
+);
+
 module.exports = router;

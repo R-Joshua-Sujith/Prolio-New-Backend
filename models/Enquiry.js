@@ -21,4 +21,6 @@ const enquirySchema = new Schema({
   ],
 });
 
+
+
 module.exports = mongoose.model("Enquiry", enquirySchema);

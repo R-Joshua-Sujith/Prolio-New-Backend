@@ -191,7 +191,7 @@ const enquiryController = {
       }
       // Find the enquiry by enquiryId
       const enquiry = await EnquiryModel.findById(enquiryId).populate({
-        path: "customerId", 
+        path: "customerId",
         select: "email name status profile",
       });
 
@@ -215,6 +215,36 @@ const enquiryController = {
         false,
         "Internal server error",
         error.message
+      );
+    }
+  },
+  // Get total enquiries count for an owner
+  getOwnerEnquiriesCount: async (req, res) => {
+    try {
+      const ownerId = req.user.id;
+
+      // Validate owner ID
+      if (!mongoose.Types.ObjectId.isValid(ownerId)) {
+        return sendResponse(res, 400, false, null, "Invalid owner ID format");
+      }
+
+      // Count enquiries for the owner
+      const count = await EnquiryModel.countDocuments({ ownerId: ownerId });
+
+      return sendResponse(
+        res,
+        200,
+        true,
+        { count },
+        "Enquiries count fetched successfully"
+      );
+    } catch (error) {
+      return sendResponse(
+        res,
+        500,
+        false,
+        null,
+        error.message || "Error counting enquiries"
       );
     }
   },
