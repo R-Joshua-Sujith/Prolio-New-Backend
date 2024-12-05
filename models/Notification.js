@@ -11,8 +11,7 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
     },
-    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
-    forumId: { type: mongoose.Schema.Types.ObjectId, ref: "Forum" },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

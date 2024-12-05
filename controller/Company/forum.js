@@ -1,32 +1,41 @@
+const express = require("express");
 const mongoose = require("mongoose");
-const socketIo = require("socket.io");
 const ForumModel = require("../../models/Forum");
 const ProductModel = require("../../models/Product");
 const { uploadToS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 const Message = require("../../models/message");
 const CustomerModel = require("../../models/Customer");
-const Notification = require("../../models/Notification");
+const socketIo = require("socket.io");
+const http = require("http");
+const app = express();
+const server = http.createServer(app);
+const NotificationService = require("../../utils/notificationService");
 
 exports.createForum = async (req, res) => {
-  const { forumName, forumDescription, objective } = req.body;
+  const {
+    forumName,
+    forumDescription,
+    objective,
+    inviteEmails = [],
+  } = req.body;
 
   try {
     const ownerId = req.user?.id;
 
     if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
-      return sendResponse(res, 400, "Invalid customer ID");
+      return sendResponse(res, 400, "Invalid owner ID");
     }
 
+    // Check if forum with the same name already exists
     const existingForum = await ForumModel.findOne({ forumName });
     if (existingForum) {
       return sendResponse(res, 409, "Forum already exists");
     }
 
-    // Handle forum image upload with S3
+    // Handle forum image upload
     let forumImageUrl = null;
     let forumImageKey = null;
-
     if (req.file) {
       const uploadResult = await uploadToS3(
         req.file.buffer,
@@ -44,19 +53,49 @@ exports.createForum = async (req, res) => {
       forumDescription,
       objective,
       forumImage: forumImageUrl,
-      publicId: forumImageKey,
+      forumImagePublicId: forumImageKey,
       ownerId,
       members: [ownerId],
     });
-
     await newForum.save();
-    console.log("New forum created:", newForum);
 
-    // Send a success response
-    sendResponse(res, 201, "Forum created successfully", { newForum });
+    // Notify the forum creator using NotificationService
+    await NotificationService.createNotification({
+      userId: ownerId,
+      message: `You have successfully created the forum ${forumName}`,
+      type: "creation",
+      io: req.io,
+    });
+
+    // Handle invitations for other users
+    if (inviteEmails.length > 0) {
+      const invitedUsers = await CustomerModel.find({
+        email: { $in: inviteEmails },
+      });
+
+      // Update forum with invited users
+      newForum.invitedUsers = invitedUsers.map((user) => user._id);
+      await newForum.save();
+
+      // Send notifications to invited users using NotificationService
+      const notificationsData = invitedUsers.map((invitee) => ({
+        userId: invitee._id,
+        message: `You have been invited to join the forum ${forumName}`,
+        type: "invite",
+      }));
+
+      await NotificationService.createBatchNotifications(
+        notificationsData,
+        req.io
+      );
+    }
+
+    return sendResponse(res, 201, "Forum created successfully", { newForum });
   } catch (error) {
     console.error("Error creating forum:", error);
-    sendResponse(res, 500, "Error creating forum", { error: error.message });
+    return sendResponse(res, 500, "Error creating forum", {
+      error: error.message,
+    });
   }
 };
 
