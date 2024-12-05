@@ -31,6 +31,16 @@ router.patch(
   WishListController.updateWishlistStatus
 );
 
+// Check if product exists in wishlist
+router.get(
+  "/check-wishlist/:productId",
+  customerVerify,
+  WishListController.checkWishlistStatus
+);
+
+// Get wishlist
+router.get("/get-wishlist", customerVerify, WishListController.getWishlist);
+
 // Clear entire wishlist
 router.delete("/:customerId", customerVerify, WishListController.clearWishlist);
 
