@@ -4,15 +4,20 @@ const { customerVerify } = require("../../controller/Customer/Middleware/auth");
 const notificationController = require("../../controller/Customer/Notification");
 
 router.patch(
-  "/:messageId/read",
+  "/mark-all-read",
   customerVerify,
-  notificationController.markMessageAsRead
+  notificationController.markNotificationAsRead
 );
 
 router.get(
   "/message-notifications",
   customerVerify,
   notificationController.getUnreadMessageNotifications
+);
+router.get(
+  "/message-notifications-count",
+  customerVerify,
+  notificationController.getUnreadMessageNotificationsCount
 );
 
 router.get(
@@ -22,8 +27,8 @@ router.get(
 );
 
 router.patch(
-  "/:id/read",
+  "/mark-Message-read",
   customerVerify,
-  notificationController.markNotificationAsRead
+  notificationController.markAllMessagesAsRead
 );
 module.exports = router;
