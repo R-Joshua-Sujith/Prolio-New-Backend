@@ -1,122 +1,294 @@
 const Notification = require("../../models/Notification");
-const sendResponse = require("../../utils/responseHandler");
 const Message = require("../../models/message");
 const Forum = require("../../models/Forum");
+const { sendResponse } = require("../../utils/responseHandler");
 
-// Get paginated notifications
+// Retrieve User Notifications Endpoint
 exports.getNotifications = async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
-  const pageNumber = parseInt(page);
-  const limitNumber = parseInt(limit);
+  const userId = req.user?.id;
+  const { page = 1, limit = 20 } = req.query; // Default values
 
   try {
-    const skip = (pageNumber - 1) * limitNumber;
-    const notifications = await Notification.find({ userId: req.user.userId })
+    const skip = (page - 1) * limit;
+
+    // Fetch unread notifications with pagination
+    const notifications = await Notification.find({
+      userId,
+    })
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limitNumber);
+      .limit(parseInt(limit));
 
-    const totalNotifications = await Notification.countDocuments({
-      userId: req.user.userId,
+    // Count unread notifications
+    const unreadCount = await Notification.countDocuments({
+      userId,
+      isRead: false,
     });
 
-    sendResponse(res, 200, {
-      notifications,
-      totalNotifications,
-      currentPage: pageNumber,
-      totalPages: Math.ceil(totalNotifications / limitNumber),
+    return res.status(200).json({
+      success: true,
+      data: {
+        notifications,
+        unreadCount,
+      },
+      message: "Notifications retrieved successfully",
     });
   } catch (error) {
-    sendResponse(res, 500, null, "Error fetching notifications");
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve notifications",
+    });
   }
 };
 
-// Mark a notification as read
-exports.markNotificationAsRead = async (req, res) => {
-  const notificationId = req.params.id;
-  try {
-    const notification = await Notification.findByIdAndUpdate(
-      notificationId,
-      { isRead: true },
-      { new: true }
-    );
+// Mark Notifications as Read
+// exports.markNotificationAsRead = async (req, res) => {
+//   const userId = req.user?.id;
+//   const { notificationIds } = req.body;
 
-    if (!notification) {
-      return sendResponse(res, 404, null, "Notification not found");
-    }
-    sendResponse(res, 200, notification, "Notification marked as read");
-  } catch (error) {
-    sendResponse(res, 500, null, "Error marking notification as read");
-  }
-};
+//   try {
+//     await Notification.updateMany(
+//       {
+//         _id: { $in: notificationIds },
+//         userId,
+//       },
+//       { $set: { isRead: true } }
+//     );
+
+//     return res.status(200).json({ message: "Notifications marked as read" });
+//   } catch (error) {
+//     return res.status(500).json({ message: "Failed to mark notifications" });
+//   }
+// };
 
 // Mark a message as read
-exports.markMessageAsRead = async (req, res) => {
-  const userId = req.user?.id;
-  const { messageId } = req.params;
-
-  if (!userId) {
-    return sendResponse(res, 400, null, "User ID is required");
-  }
+exports.markNotificationAsRead = async (req, res) => {
   try {
-    const message = await Message.findById(messageId);
-    if (!message) {
-      return sendResponse(res, 404, null, "Message not found");
-    }
-
-    const userReadEntry = message.readBy.find(
-      (entry) => entry.userId.toString() === userId
+    const userId = req.user?.id;
+    const updatedNotifications = await Notification.updateMany(
+      { userId, isRead: false },
+      { $set: { isRead: true } }
     );
-    if (userReadEntry) {
-      userReadEntry.isRead = true;
+
+    if (updatedNotifications.nModified > 0) {
+      return res.status(200).json({
+        success: true,
+        message: `${updatedNotifications.nModified} notifications marked as read`,
+      });
     } else {
-      message.readBy.push({ userId, isRead: true });
+      return res.status(200).json({
+        success: true,
+        message: "No unread notifications found",
+      });
+    }
+  } catch (error) {
+    console.error("Error updating notifications:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error marking notifications as read",
+    });
+  }
+};
+
+exports.markAllMessagesAsRead = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    // Find all forums the user is a member of
+    const userForums = await Forum.find({ members: userId }).distinct("_id");
+    console.log("User Forums:", userForums);
+
+    // If the user is not a member of any forum, return a success message with no updates
+    if (!userForums.length) {
+      return res.status(200).json({
+        success: true,
+        message: "No messages to mark as read.",
+      });
     }
 
-    await message.save();
-    sendResponse(res, 200, message, "Message marked as read");
+    // Find unread messages
+    const unreadMessages = await Message.find({
+      forumId: { $in: userForums },
+      ownerId: { $ne: userId }, // Exclude messages owned by the user
+      deleted: { $ne: true }, // Exclude deleted messages
+      $or: [
+        { readBy: { $size: 0 } }, // Messages with empty readBy array
+        { "readBy.customerId": { $ne: userId } }, // User has not read this message
+        { readBy: { $elemMatch: { customerId: userId, isRead: false } } }, // User has unread messages
+      ],
+    });
+
+    // Manually update each message
+    const updatePromises = unreadMessages.map(async (message) => {
+      // Find the index of the user in readBy array (if exists)
+      const userReadIndex = message.readBy.findIndex(
+        (rb) => rb.customerId.toString() === userId.toString()
+      );
+
+      if (userReadIndex !== -1) {
+        // If user exists in readBy, update their isRead status
+        message.readBy[userReadIndex].isRead = true;
+      } else {
+        // If user doesn't exist, add a new entry
+        message.readBy.push({
+          customerId: userId,
+          isRead: true,
+        });
+      }
+
+      // Save the message
+      return message.save();
+    });
+    const results = await Promise.all(updatePromises);
+
+    return res.status(200).json({
+      success: true,
+      message: "All messages marked as read.",
+      updatedCount: results.length,
+    });
   } catch (error) {
-    sendResponse(res, 500, null, "Error marking message as read");
+    console.error("Error marking all messages as read:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark all messages as read.",
+      errorDetails: error.message,
+    });
+  }
+};
+
+exports.getUnreadMessageNotificationsCount = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Find all forums the user is a member of
+    const userForums = await Forum.find({ members: userId }).distinct("_id");
+
+    // If userForums is empty, return an empty response
+    if (!userForums.length) {
+      return res.status(200).json({
+        success: true,
+        messages: [],
+        totalUnreadMessages: 0,
+      });
+    }
+
+    // Query for unread messages, with additional conditions:
+    // 1. Exclude messages owned by the current user
+    // 2. Exclude deleted messages
+    // 3. Ensure the message is unread by the current user
+    const unreadMessagesQuery = {
+      forumId: { $in: userForums },
+      ownerId: { $ne: userId }, // Exclude messages owned by the current user
+      deleted: { $ne: true }, // Exclude deleted messages
+      $or: [
+        { "readBy.customerId": { $ne: userId } }, // User has not read this message
+        { readBy: { $elemMatch: { customerId: userId, isRead: false } } }, // User has unread messages
+      ],
+    };
+
+    // Total unread message count
+    const totalUnreadMessages = await Message.countDocuments(
+      unreadMessagesQuery
+    );
+
+    // Paginated unread messages
+    const unreadMessages = await Message.find(unreadMessagesQuery)
+      .populate("forumId", "forumName") // Populate forum details
+      .populate("ownerId", "companyDetails.companyInfo.companyName")
+      .select("text attachment productLink")
+      .sort({ createdAt: -1 }) // Sort by most recent
+      .skip(skip) // Skip for pagination
+      .limit(parseInt(limit)); // Limit results per page
+
+    // Response
+    return res.status(200).json({
+      success: true,
+      messages: unreadMessages,
+      totalUnreadMessages, // Total unread message count
+      hasMore: unreadMessages.length + skip < totalUnreadMessages, // Check if more messages are available
+    });
+  } catch (error) {
+    console.error("Error fetching unread messages:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching unread messages",
+    });
   }
 };
 
 // Fetch unread message notifications
 exports.getUnreadMessageNotifications = async (req, res) => {
-  const userId = req.user?.id;
-
   try {
+    const userId = req.user?.id;
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Find all forums the user is a member of
     const userForums = await Forum.find({ members: userId }).distinct("_id");
 
+    // If userForums is empty, return an empty response
     if (!userForums.length) {
-      return sendResponse(res, 200, []);
+      return res.status(200).json({
+        success: true,
+        messages: [],
+        totalMessages: 0,
+      });
     }
 
-    const unreadMessages = await Message.find({
-      userId: { $ne: userId },
+    // Query for unread messages, with additional conditions:
+    // 1. Exclude messages owned by the current user
+    // 2. Exclude deleted messages
+    // 3. Ensure the message is unread by the current user
+    const messagesQuery = {
       forumId: { $in: userForums },
+      ownerId: { $ne: userId }, // Exclude messages owned by the current user
+      deleted: { $ne: true }, // Exclude deleted messages
       $or: [
-        { "readBy.userId": { $ne: userId } },
-        { "readBy.userId": userId, "readBy.isRead": false },
+        { "readBy.customerId": { $ne: userId } }, // User has not read this message
+        { readBy: { $elemMatch: { customerId: userId } } }, // User has unread messages
       ],
-    })
-      .populate("userId", "firstName lastName email")
-      .sort({ createdAt: -1 });
+    };
 
-    const populatedMessages = await Promise.all(
-      unreadMessages.map(async (message) => {
-        const companyDetails = await companyDetailsModel.findOne({
-          userId: message.userId._id,
-        });
+    // Total unread message count
+    const totalMessages = await Message.countDocuments(messagesQuery);
 
-        return {
-          ...message.toObject(),
-          companyName: companyDetails ? companyDetails.companyName : null,
-        };
-      })
-    );
+    // Paginated unread messages
+    const messages = await Message.find(messagesQuery)
+      .populate("forumId", "forumName") // Populate forum details
+      .populate("ownerId", "companyDetails.companyInfo.companyName")
+      .select("text attachment productLink readBy") // Include readBy field
+      .sort({ createdAt: -1 }) // Sort by most recent
+      .skip(skip) // Skip for pagination
+      .limit(parseInt(limit)); // Limit results per page
 
-    sendResponse(res, 200, populatedMessages);
+    // Add the read status to each message for the current user
+    const messagesWithReadStatus = messages.map((message) => {
+      // Check if the current user has read this message
+      const readStatus = message.readBy.some(
+        (readRecord) =>
+          readRecord.customerId.toString() === userId.toString() &&
+          readRecord.isRead
+      );
+
+      return {
+        ...message.toObject(),
+        isRead: readStatus, // Add read status to the response
+      };
+    });
+
+    // Response
+    return res.status(200).json({
+      success: true,
+      messages: messagesWithReadStatus,
+      totalMessages, // Total unread message count
+      hasMore: messagesWithReadStatus.length + skip < totalMessages, // Check if more messages are available
+    });
   } catch (error) {
-    sendResponse(res, 500, null, "Error fetching unread messages");
+    console.error("Error fetching unread messages:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching unread messages",
+    });
   }
 };
