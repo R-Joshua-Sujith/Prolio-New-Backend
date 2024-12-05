@@ -4,7 +4,6 @@ const Schema = mongoose.Schema;
 const subCategorySchema = new Schema({
     name: {
         type: String,
-        required: true,
         trim: true
     },
     isActive: {
@@ -13,15 +12,11 @@ const subCategorySchema = new Schema({
     }
 }, { _id: true });
 
-const categorySchema = new Schema({
-    categoryName: {
-        type: String,
-        required: true,
-        trim: true,
-        unique: true
-    },
-    subCategories: [subCategorySchema],
-    isActive: {
+const CategorySchema = new mongoose.Schema({
+    "categoryName": { type: String, required: true, unique: true },
+    "steps": { type: mongoose.Schema.Types.Mixed },
+    "subCategories": [subCategorySchema],
+    "isActive": {
         type: Boolean,
         default: true
     }
@@ -29,5 +24,6 @@ const categorySchema = new Schema({
     timestamps: true
 });
 
+const CategoryModel = mongoose.model("Category", CategorySchema)
 
-module.exports = mongoose.model("Category", categorySchema);
+module.exports = CategoryModel;
