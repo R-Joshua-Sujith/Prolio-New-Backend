@@ -40,11 +40,11 @@ const customerSchema = new Schema(
       companyInfo: {
         companyName: { type: String },
         ownerName: { type: String },
-        yearEstablishment: { type: Number },
+        yearEstablishment: { type: String },
         gstNo: { type: String },
         businessType: { type: String },
         companyAbout: { type: String },
-        totalEmployees: { type: Number },
+        totalEmployees: { type: String },
       },
       contactInfo: {
         address: { type: String },

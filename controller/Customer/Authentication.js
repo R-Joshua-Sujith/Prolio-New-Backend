@@ -342,7 +342,6 @@ exports.checkCompanyStatus = async (req, res) => {
 exports.googleLogin = async (req, res) => {
   try {
     const { email, given_name: name, picture: profile } = req.body;
-
     let user = await Customer.findOne({ email });
 
     if (!user) {
@@ -350,11 +349,12 @@ exports.googleLogin = async (req, res) => {
       user = new Customer({
         email,
         name,
-        isGoogleLogin: true, // Set isGoogleLogin to true for new users
+        isGoogleLogin: true,
         profile: {
           url: profile,
           publicId: profile.split("/").pop(),
         },
+        status: "Verified",
       });
       await user.save();
     } else {
@@ -364,7 +364,6 @@ exports.googleLogin = async (req, res) => {
         await user.save();
       }
     }
-
     const payload = {
       id: user._id,
     };

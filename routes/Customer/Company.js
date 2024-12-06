@@ -19,7 +19,7 @@ const uploadFields = upload.fields([
 router.post(
   "/register-company",
   uploadFields,
-  //   customerVerify,
+  customerVerify,
   companyController.registerCompany
 );
 
