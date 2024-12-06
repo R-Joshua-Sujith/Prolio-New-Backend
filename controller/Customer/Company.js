@@ -8,35 +8,38 @@ const companyController = {
   /**
    * Register company API
    * company registration and uploading files to S3.
-   * @param {Object} req -request object
    * @param {Object} req.body - (company info) and `contactData
    * @param {Object} req.files - Uploaded files (documents, companyLogo)
-   * @param {Object} res -response object
-   * @returns {void}
    */
+
   registerCompany: async (req, res) => {
     const { formData, contactData } = req.body;
-    const userId = "6735e1de6fc1600f43aea05d";
+    const userId = req.user?.id;
     const documents = req.files?.documents || [];
     const companyLogo = req.files?.companyLogo?.[0];
 
     const saveFiles = [];
     try {
-      // Upload documents to S3
-      for (const doc of documents) {
-        const uploadedDoc = await uploadToS3(
-          doc.buffer,
-          doc.originalname,
-          doc.mimetype,
-          "company/documents"
-        );
-        saveFiles.push({
-          url: uploadedDoc.url,
-          publicId: uploadedDoc.filename,
-        });
-      }
+      // Parse formData and contactData
+      const parsedFormData = JSON.parse(formData);
+      const parsedContactData = JSON.parse(contactData);
 
-      // Upload company logo to S3
+      // Handle document uploads
+      if (documents.length > 0) {
+        for (const doc of documents) {
+          const uploadedDoc = await uploadToS3(
+            doc.buffer,
+            doc.originalname,
+            doc.mimetype,
+            "company/documents"
+          );
+          saveFiles.push({
+            url: uploadedDoc.url,
+            publicId: uploadedDoc.filename,
+          });
+        }
+      }
+      // Handle company logo upload
       let savedCompanyLogo = null;
       if (companyLogo) {
         const uploadedLogo = await uploadToS3(
@@ -50,35 +53,35 @@ const companyController = {
           publicId: uploadedLogo.filename,
         };
       }
-
-      // Prepare data for saving to the database
+      // Prepare the company data
       const companyData = {
         companyInfo: {
-          companyName: formData.companyName,
-          ownerName: formData.ownerName,
-          yearEstablishment: formData.yearEstablishment,
-          gstNo: formData.gstNo,
-          businessType: formData.businessType,
-          businessType: formData.businessType,
-          totalEmployees: formData.totalEmployees,
+          companyName: parsedFormData.companyName,
+          ownerName: parsedFormData.ownerName,
+          yearEstablishment: parsedFormData.yearEstablishment,
+          gstNo: parsedFormData.gstNo,
+          businessType: parsedFormData.businessType,
+          totalEmployees: parsedFormData.totalEmployees,
+          companyAbout: parsedFormData.companyAbout,
         },
         contactInfo: {
-          address: contactData.address,
-          city: contactData.city,
-          state: contactData.state,
-          pincode: contactData.pincode,
-          email: contactData.email,
-          phone: contactData.phone,
+          address: parsedContactData.address,
+          city: parsedContactData.city,
+          state: parsedContactData.state,
+          pincode: parsedContactData.pincode,
+          email: parsedContactData.email,
+          phone: parsedContactData.phone,
         },
         companyLogo: savedCompanyLogo,
         documents: saveFiles,
       };
+
+      // Find the customer and update with the company details
       const customer = await Customer.findByIdAndUpdate(
         userId,
         { "isCompany.applied": true, companyDetails: companyData },
         { new: true }
       );
-
       if (!customer) {
         return sendResponse(res, 404, false, "Customer not found");
       }
@@ -86,7 +89,7 @@ const companyController = {
         companyDetails: customer.companyDetails,
       });
     } catch (error) {
-      console.error("Error uploading files:", error);
+      console.error("Error during company registration:", error);
       return sendResponse(
         res,
         500,
