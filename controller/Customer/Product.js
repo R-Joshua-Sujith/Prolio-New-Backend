@@ -73,23 +73,18 @@ exports.getAllProducts = async (req, res) => {
     const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
 
-    // Build query with more efficient filtering
+    // Build query for filtering
     const query = {};
-
-    // More efficient search using text index
     if (searchTerm) {
-      query.$text = { $search: searchTerm };
+      query.$or = [
+        { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
+        { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
+      ];
     }
+    if (category) query["category.categoryId"] = category;
+    if (subcategory) query["category.subCategoryId"] = subcategory;
 
-    if (category) {
-      query["category.categoryId"] = category;
-    }
-
-    if (subcategory) {
-      query["category.subCategoryId"] = subcategory;
-    }
-
-    // Perform parallel database operations
+    // Fetch data concurrently
     const [products, totalProducts, allCategories] = await Promise.all([
       ProductModel.find(query)
         .select("basicDetails images category ownerId companyId")
@@ -99,24 +94,24 @@ exports.getAllProducts = async (req, res) => {
         })
         .skip(skip)
         .limit(limitNum),
-
       ProductModel.countDocuments(query),
-
       CategoryModel.find({}, "categoryName subCategories"),
     ]);
 
-    // Create efficient maps for category lookup
-    const categoryMap = new Map(
-      allCategories.flatMap((category) => [
-        [category._id.toString(), category.categoryName],
-        ...category.subCategories.map((sub) => [sub._id.toString(), sub.name]),
-      ])
-    );
+    // Create maps for category and subcategory names
+    const categoryMap = new Map();
+    const subcategoryMap = new Map();
 
-    // Skip fetching enquiries if userId is invalid or not provided
+    allCategories.forEach((category) => {
+      categoryMap.set(category._id.toString(), category.categoryName);
+      category.subCategories.forEach((sub) => {
+        subcategoryMap.set(sub._id.toString(), sub.name);
+      });
+    });
+
+    // Get enquiry statuses if `userId` is valid
     let enquiryMap = new Map();
     if (userId && mongoose.Types.ObjectId.isValid(userId)) {
-      // Bulk fetch enquiries and optimize processing
       const productIds = products.map((product) => product._id);
       const enquiries = await EnquiryModel.find({
         productId: { $in: productIds },
@@ -131,8 +126,8 @@ exports.getAllProducts = async (req, res) => {
       );
     }
 
-    // Transform products more efficiently
-    const transformedData = products.map((product) => ({
+    // Transform products for response
+    const transformedProducts = products.map((product) => ({
       id: product._id,
       userId: product.ownerId?._id,
       companyId: product.companyId?._id,
@@ -150,16 +145,33 @@ exports.getAllProducts = async (req, res) => {
         categoryMap.get(product.category.categoryId?.toString()) ||
         "Unknown Category",
       subcategory:
-        categoryMap.get(product.category.subCategoryId?.toString()) ||
+        subcategoryMap.get(product.category.subCategoryId?.toString()) ||
         "Unknown Subcategory",
       enquiryStatus: enquiryMap.get(product._id.toString()) || "Not Enquired",
     }));
 
-    return sendResponse(res, 200, "Products fetched successfully", {
-      products: transformedData,
-      totalItems: totalProducts,
-      totalPages: Math.ceil(totalProducts / limitNum),
-    });
+    // Transform categories for structured response
+    const transformedCategories = allCategories.map((category) => ({
+      id: category._id,
+      name: category.categoryName,
+      subcategories: category.subCategories.map((sub) => ({
+        id: sub._id,
+        name: sub.name,
+      })),
+    }));
+
+    // Send response
+    return sendResponse(
+      res,
+      200,
+      "Products and categories fetched successfully",
+      {
+        products: transformedProducts,
+        categories: transformedCategories,
+        totalItems: totalProducts,
+        totalPages: Math.ceil(totalProducts / limitNum),
+      }
+    );
   } catch (error) {
     console.error("Error fetching products:", error);
     return sendResponse(res, 500, "Internal Server Error", {
@@ -167,7 +179,6 @@ exports.getAllProducts = async (req, res) => {
     });
   }
 };
-
 
 exports.getSearchProducts = async (req, res) => {
   try {
@@ -191,6 +202,7 @@ exports.getSearchProducts = async (req, res) => {
         { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
       ];
     }
+    console.log("Search Query:", query);
 
     if (category) {
       query["category.categoryId"] = category;

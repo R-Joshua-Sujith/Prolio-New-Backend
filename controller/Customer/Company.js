@@ -20,6 +20,22 @@ const companyController = {
 
     const saveFiles = [];
     try {
+      // Check if the customer exists
+      const existingCustomer = await Customer.findById(userId);
+      if (!existingCustomer) {
+        return sendResponse(res, 404, false, "Customer not found");
+      }
+
+      // Check if the customer has already applied for company registration
+      if (existingCustomer.isCompany.applied) {
+        return sendResponse(
+          res,
+          400,
+          false,
+          "You have already applied for company registration"
+        );
+      }
+
       // Parse formData and contactData
       const parsedFormData = JSON.parse(formData);
       const parsedContactData = JSON.parse(contactData);
@@ -39,6 +55,7 @@ const companyController = {
           });
         }
       }
+
       // Handle company logo upload
       let savedCompanyLogo = null;
       if (companyLogo) {
@@ -53,6 +70,7 @@ const companyController = {
           publicId: uploadedLogo.filename,
         };
       }
+
       // Prepare the company data
       const companyData = {
         companyInfo: {
@@ -76,17 +94,15 @@ const companyController = {
         documents: saveFiles,
       };
 
-      // Find the customer and update with the company details
-      const customer = await Customer.findByIdAndUpdate(
+      // Update the customer with company details
+      const updatedCustomer = await Customer.findByIdAndUpdate(
         userId,
         { "isCompany.applied": true, companyDetails: companyData },
         { new: true }
       );
-      if (!customer) {
-        return sendResponse(res, 404, false, "Customer not found");
-      }
+
       return sendResponse(res, 200, true, "Company registered successfully", {
-        companyDetails: customer.companyDetails,
+        companyDetails: updatedCustomer.companyDetails,
       });
     } catch (error) {
       console.error("Error during company registration:", error);
