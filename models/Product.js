@@ -3,13 +3,18 @@ const Schema = mongoose.Schema;
 
 const productSchema = new Schema(
   {
-    status: [
-      {
-        type: String,
-        enum: ["Active", "In_Active", "Draft"],
-        default: "Active",
-      },
-    ],
+    status: {
+      type: String,
+      enum: ["Active", "In_Active", "Draft"],
+      default: "Active",
+    },
+    block: {
+      isBlocked: { type: Boolean, default: false },
+      reason: { type: String, default: null },
+      blockedBy: { type: Schema.Types.ObjectId, ref: "Admin", default: null },
+      blockedAt: { type: Date, default: null },
+    },
+
     ownerId: { type: Schema.Types.ObjectId, ref: "Customer" },
     basicDetails: {
       id: { type: String },
