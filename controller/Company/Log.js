@@ -206,4 +206,113 @@ const getLogsByUserId = async (req, res) => {
   }
 };
 
-module.exports = { createLogs, getLogs, getLogsByTargetId, getLogsByUserId };
+const getLogsByCustomerId = async (req, res) => {
+  try {
+    const customerId = req.params.customerId;
+    const { search, startDate, endDate, page = 1, pageSize = 10 } = req.query;
+
+    console.log("Fetching logs for customerId:", customerId);
+
+    // Construct match criteria
+    const buildMatchCriteria = () => {
+      const criteria = {
+        userId: new mongoose.Types.ObjectId(customerId), // Directly match userId
+      };
+
+      if (search) {
+        const searchRegex = new RegExp(search, "i");
+        criteria.$or = [{ action: searchRegex }];
+      }
+
+      if (startDate || endDate) {
+        criteria.createdAt = {
+          ...(startDate && { $gte: new Date(startDate) }),
+          ...(endDate && { $lte: new Date(endDate) }),
+        };
+      }
+
+      return criteria;
+    };
+
+    // Pagination setup
+    const pagination = {
+      skip: (page - 1) * pageSize,
+      limit: parseInt(pageSize, 10),
+    };
+
+    // Aggregation pipeline
+    const aggregationPipeline = [
+      { $match: buildMatchCriteria() },
+      {
+        $lookup: {
+          from: "customers",
+          localField: "userId",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      { $unwind: "$userDetails" },
+      {
+        $lookup: {
+          from: "companydetails",
+          localField: "userDetails.companyDetails",
+          foreignField: "_id",
+          as: "companyDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$companyDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          action: 1,
+          timestamp: 1,
+          targetModel: 1,
+          customerName: "$userDetails.name",
+          customerEmail: "$userDetails.email",
+          createdAt: 1,
+        },
+      },
+      { $sort: { timestamp: -1 } },
+      { $skip: pagination.skip },
+      { $limit: pagination.limit },
+    ];
+
+    // Parallel execution of logs and total count
+    const [logs, totalLogs] = await Promise.all([
+      Logs.aggregate(aggregationPipeline),
+      Logs.countDocuments(buildMatchCriteria()),
+    ]);
+
+    // Check if logs exist
+    if (!logs.length) {
+      return sendResponse(res, 404, false, "No logs found for this customer");
+    }
+
+    // Prepare response with pagination metadata
+    return sendResponse(res, 200, true, "Logs fetched successfully", {
+      logs,
+      totalLogs,
+      page: parseInt(page),
+      pageSize: pagination.limit,
+      totalPages: Math.ceil(totalLogs / pagination.limit),
+    });
+  } catch (error) {
+    console.error("Error fetching logs:", error);
+    return sendResponse(res, 500, false, "Error fetching logs", {
+      details: error.message,
+    });
+  }
+};
+
+module.exports = {
+  createLogs,
+  getLogs,
+  getLogsByTargetId,
+  getLogsByUserId,
+  getLogsByCustomerId,
+};

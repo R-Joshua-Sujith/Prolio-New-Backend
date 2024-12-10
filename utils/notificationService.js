@@ -4,11 +4,9 @@ const Notification = require("../models/Notification");
 class NotificationService {
   /**
    * Create a notification for a specific user
-   * @param {Object} params - Notification parameters
    * @param {string} params.userId - ID of the user receiving the notification
    * @param {string} params.message - Notification message
    * @param {string} params.type - Notification type
-   * @param {Object} [params.metadata] - Optional additional metadata
    * @param {Object} [params.io] - Socket.io instance for real-time notifications
    * @returns {Promise<Notification>} Created notification
    */
@@ -39,7 +37,6 @@ class NotificationService {
   /**
    * Create multiple notifications in batch
    * @param {Array<Object>} notificationsData - Array of notification parameters
-   * @param {Object} [options] - Additional options
    * @param {Object} [options.io] - Socket.io instance for real-time notifications
    * @returns {Promise<Array<Notification>>} Created notifications
    */

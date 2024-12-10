@@ -11,4 +11,6 @@ router.get("/own-logs", companyVerify, logController.getLogsByUserId);
 
 router.get("/all-logs", logController.getLogs);
 
+router.get("/company-logs/:customerId", logController.getLogsByCustomerId);
+
 module.exports = router;
