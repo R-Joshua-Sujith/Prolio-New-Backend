@@ -15,4 +15,10 @@ router.get(
   adminProductController.getProductBySlug
 );
 
+router.put(
+  "/update-product-status/:productId",
+  adminVerify,
+  adminProductController.updateProductStatus
+);
+
 module.exports = router;

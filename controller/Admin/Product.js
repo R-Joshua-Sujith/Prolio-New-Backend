@@ -247,4 +247,45 @@ const getProductBySlug = async (req, res) => {
   }
 };
 
-module.exports = { getAllProducts, getProductBySlug };
+const updateProductStatus = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { isBlocked } = req.body;
+    const userId = req.user._id;
+
+    const product = await Product.findByIdAndUpdate(
+      productId,
+      {
+        $set: {
+          "block.isBlocked": isBlocked,
+          "block.blockedAt": isBlocked ? new Date() : null,
+          "block.blockedBy": isBlocked ? userId : null,
+          status: isBlocked ? "In_Active" : "Active",
+        },
+      },
+      { new: true }
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Product ${isBlocked ? "blocked" : "unblocked"} successfully`,
+      data: product,
+    });
+  } catch (error) {
+    console.error("Error updating product status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update product status",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = { getAllProducts, getProductBySlug, updateProductStatus };
