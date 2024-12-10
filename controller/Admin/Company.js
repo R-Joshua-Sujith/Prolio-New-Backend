@@ -114,6 +114,8 @@ exports.getPendingCompanyUsers = async (req, res) => {
   }
 };
 
+
+
 (exports.updateCompanyStatus = async (req, res) => {
   try {
     const { companyId } = req.params;
@@ -244,7 +246,3 @@ exports.getPendingCompanyUsers = async (req, res) => {
       return sendResponse(res, 500, "Server error");
     }
   });
-
-
-
-  
