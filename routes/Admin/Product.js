@@ -5,7 +5,7 @@ const { adminVerify } = require("../../controller/Admin/Middleware/auth");
 
 router.get(
   "/get-all-products/:ownerId",
-  // adminVerify,
+  adminVerify,
   adminProductController.getAllProducts
 );
 
