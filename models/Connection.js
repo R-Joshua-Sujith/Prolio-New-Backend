@@ -4,12 +4,12 @@ const mongoose = require("mongoose");
 const ConnectionSchema = new mongoose.Schema({
   participant: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Customer", // Changed to "User" instead of "users"
+    ref: "Customer", 
     required: true,
   },
   forum: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Forum", // Changed to "Forum" instead of "forums"
+    ref: "Forum", 
   },
   createdAt: {
     type: Date,
@@ -21,7 +21,7 @@ const OwnerConnectionsSchema = new mongoose.Schema(
   {
     forumOwner: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Customer", // Changed to "User" instead of "users"
+      ref: "Customer", 
       required: true,
       unique: true,
     },
