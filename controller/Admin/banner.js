@@ -4,7 +4,7 @@ const { sendResponse } = require("../../utils/responseHandler");
 
 exports.createBanner = async (req, res) => {
   try {
-    const { description, descriptionColor, status = "active" } = req.body;
+    const { description, colors, status = "active" } = req.body;
 
     // Upload multiple files to S3
     const uploadPromises = req.files.map((file) =>
@@ -20,7 +20,7 @@ exports.createBanner = async (req, res) => {
     const newBanner = new Banner({
       bannerImg,
       description,
-      descriptionColor,
+      descriptionColor: colors,
       status,
     });
 
@@ -73,55 +73,74 @@ exports.deleteBanner = async (req, res) => {
   try {
     const bannerId = req.params.id;
     console.log("bannerId", bannerId);
+
+    // Find the banner by ID
     const banner = await Banner.findById(bannerId);
     if (!banner) {
       return sendResponse(res, 404, false, "Banner not found");
     }
 
-    // Delete the image from S3
-    await deleteFromS3(banner.bannerImg[0].url);
+    // If banner has multiple images, iterate and delete each one from S3 by publicId
+    if (banner.bannerImg && banner.bannerImg.length > 0) {
+      for (let img of banner.bannerImg) {
+        // Delete each image from S3 by its publicId
+        await deleteFromS3ByPublicId(img.publicId);
+      }
+    }
+
+    // Delete the banner document from the database
     await Banner.findByIdAndDelete(bannerId);
-    sendResponse(res, 200, true, "Banner deleted successfully");
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Banner and all associated images deleted successfully"
+    );
   } catch (error) {
     console.error("Error deleting banner:", error);
     sendResponse(res, 500, false, "Error deleting banner", error.message);
   }
 };
 
-// Controller to change the banner status
-exports.updateBannerStatus = async (req, res) => {
+// Get all banners
+exports.getAllBanners = async (req, res) => {
   try {
-    const bannerId = req.params.id;
-    const { status } = req.body;
-    if (!["active", "inactive"].includes(status)) {
-      return sendResponse(
-        res,
-        400,
-        false,
-        'Invalid status. Only "active" or "inactive" are allowed.'
-      );
+    const banners = await Banner.find();
+    res.status(200).json({
+      success: true,
+      message: "Banners retrieved successfully",
+      data: banners,
+    });
+  } catch (error) {
+    // Catch and handle any errors
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+
+// Toggle banner status between 'active' and 'inactive'
+exports.toggleBannerStatus = async (req, res) => {
+  const { bannerId } = req.params;
+  try {
+    const banner = await Banner.findById(bannerId);
+    if (!banner) {
+      return sendResponse(res, 404, false, "Banner not found");
     }
-    // Update the banner's status
-    const updatedBanner = await Banner.findByIdAndUpdate(
-      bannerId,
-      { status },
-      { new: true }
-    );
-    sendResponse(
+    // Toggle the status
+    banner.status = banner.status === "active" ? "inactive" : "active";
+    await banner.save();
+    return sendResponse(
       res,
       200,
       true,
-      "Banner status updated successfully",
-      updatedBanner
+      `Banner status updated to ${banner.status}`,
+      banner
     );
   } catch (error) {
-    console.error("Error updating banner status:", error);
-    sendResponse(
-      res,
-      500,
-      false,
-      "Error updating banner status",
-      error.message
-    );
+    return sendResponse(res, 500, false, "Server Error", error.message);
   }
 };
