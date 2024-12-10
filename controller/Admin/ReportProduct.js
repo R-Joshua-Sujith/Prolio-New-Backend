@@ -199,7 +199,6 @@ exports.deleteReport = async (req, res) => {
 //   }
 // };
 
-
 exports.toggleProductBlock = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -265,14 +264,14 @@ exports.toggleProductBlock = async (req, res) => {
     if (reportId && action === "block") {
       const updatedReport = await Report.findByIdAndUpdate(
         reportId,
-        { 
+        {
           status: "resolved",
           resolvedAt: new Date(),
-          resolvedBy: req.user.id
+          resolvedBy: req.user.id,
         },
-        { 
+        {
           new: true,
-          session 
+          session,
         }
       );
 
@@ -292,7 +291,7 @@ exports.toggleProductBlock = async (req, res) => {
       message: `Product successfully ${action}ed`,
       data: {
         product: updatedProduct,
-        report: reportId ? { status: "resolved" } : null
+        report: reportId ? { status: "resolved" } : null,
       },
     });
   } catch (error) {

@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const ConnectionSchema = new mongoose.Schema({
   participant: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Customer",
+    ref: "Customer", 
     required: true,
   },
   forum: {
@@ -21,7 +21,7 @@ const OwnerConnectionsSchema = new mongoose.Schema(
   {
     forumOwner: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Customer", // Changed to "User" instead of "users"
+      ref: "Customer", 
       required: true,
       unique: true,
     },
