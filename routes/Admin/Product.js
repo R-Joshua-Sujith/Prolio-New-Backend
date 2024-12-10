@@ -4,8 +4,8 @@ const adminProductController = require("../../controller/Admin/Product");
 const { adminVerify } = require("../../controller/Admin/Middleware/auth");
 
 router.get(
-  "/get-all-products",
-  adminVerify,
+  "/get-all-products/:ownerId",
+  // adminVerify,
   adminProductController.getAllProducts
 );
 

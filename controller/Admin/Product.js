@@ -3,6 +3,15 @@ const Product = require("../../models/Product");
 
 const getAllProducts = async (req, res) => {
   try {
+    // Extract ownerId from query params
+    const { ownerId } = req.params;
+    if (!ownerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Owner ID is required",
+      });
+    }
+
     // Pagination
     const page = Math.max(parseInt(req.query.page) || 1, 1);
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
@@ -24,8 +33,11 @@ const getAllProducts = async (req, res) => {
         }
       : {};
 
-    // Fetch products
-    const products = await Product.find(searchQuery)
+    // Fetch products by ownerId
+    const products = await Product.find({
+      ownerId,
+      ...searchQuery,
+    })
       .select({
         basicDetails: 1,
         images: 1,
@@ -42,7 +54,10 @@ const getAllProducts = async (req, res) => {
       .limit(limit)
       .lean();
 
-    const total = await Product.countDocuments(searchQuery);
+    const total = await Product.countDocuments({
+      ownerId,
+      ...searchQuery,
+    });
 
     // Format products
     const formattedProducts = products.map((product) => ({
@@ -103,14 +118,19 @@ const getAllProducts = async (req, res) => {
       },
       data: formattedProducts,
       links: {
-        self: `/api/products?page=${page}&limit=${limit}`,
-        first: `/api/products?page=1&limit=${limit}`,
-        last: `/api/products?page=${Math.ceil(total / limit)}&limit=${limit}`,
+        self: `/api/products?ownerId=${ownerId}&page=${page}&limit=${limit}`,
+        first: `/api/products?ownerId=${ownerId}&page=1&limit=${limit}`,
+        last: `/api/products?ownerId=${ownerId}&page=${Math.ceil(
+          total / limit
+        )}&limit=${limit}`,
         next:
           page * limit < total
-            ? `/api/products?page=${page + 1}&limit=${limit}`
+            ? `/api/products?ownerId=${ownerId}&page=${page + 1}&limit=${limit}`
             : null,
-        prev: page > 1 ? `/api/products?page=${page - 1}&limit=${limit}` : null,
+        prev:
+          page > 1
+            ? `/api/products?ownerId=${ownerId}&page=${page - 1}&limit=${limit}`
+            : null,
       },
     });
   } catch (error) {
@@ -221,7 +241,8 @@ const getProductBySlug = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: process.env.NODE_ENV === "dsevelopment" ? error.message : undefined,
+      error:
+        process.env.NODE_ENV === "dsevelopment" ? error.message : undefined,
     });
   }
 };
