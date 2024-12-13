@@ -6,7 +6,7 @@ const { adminVerify } = require("../../controller/Admin/Middleware/auth");
 // Use the optimized version
 router.get(
   "/dashboard-stats",
-  adminVerify,
+  // adminVerify,
   analyticsController.getDashboardStatsOptimized
 );
 

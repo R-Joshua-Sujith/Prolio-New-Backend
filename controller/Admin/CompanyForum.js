@@ -26,8 +26,6 @@ const { sendResponse } = require("../../utils/responseHandler");
     return sendResponse(res, 500, "Server error");
   }
 }),
-
-
   (exports.toggleBlockUnblockForum = async (req, res) => {
     try {
       const { forumId } = req.params;
