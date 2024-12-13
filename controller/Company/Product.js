@@ -278,11 +278,7 @@ const getAllCompanyProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Build query object with ownerId
-    const query = {
-      ownerId,
-      status: "Active",
-      "block.isBlocked": false,
-    };
+    const query = { ownerId };
 
     // Search functionality
     if (searchTerm) {
