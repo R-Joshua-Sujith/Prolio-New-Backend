@@ -7,6 +7,7 @@ const companyForumRoutes = require("../Company/Forum");
 const companyMessageRoutes = require("../Company/Message");
 const companyConnectionRoutes = require("../Company/Connection");
 const companyLogsRoutes = require("../Company/Logs");
+const companyFAQRoutes = require("../Company/FAQ's.js");
 
 router.use("/enquiry", companyEnquiryRoutes);
 router.use("/forum", companyForumRoutes);
@@ -16,5 +17,6 @@ router.use("/product", companyProductRoutes);
 router.use("/category", companyCategoryRoutes);
 router.use("/connection", companyConnectionRoutes);
 router.use("/logs", companyLogsRoutes);
+router.use("/faqs", companyFAQRoutes);
 
 module.exports = router;
