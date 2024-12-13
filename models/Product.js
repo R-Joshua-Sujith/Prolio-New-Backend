@@ -58,6 +58,7 @@ const productSchema = new Schema(
       },
     ],
     totalViews: { type: Number, default: 0 },
+    shareCount: { type: Number, default: 0 },
   },
   {
     timestamps: true,
