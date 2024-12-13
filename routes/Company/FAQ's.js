@@ -41,4 +41,10 @@ router.patch(
   companyFAQController.editFaqQuestion
 );
 
+router.get(
+  "/rejected-faqs",
+  companyVerify,
+  companyFAQController.getRejectedFAQs
+);
+
 module.exports = router;
