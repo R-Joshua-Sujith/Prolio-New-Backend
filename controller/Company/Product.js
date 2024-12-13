@@ -278,7 +278,11 @@ const getAllCompanyProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Build query object with ownerId
-    let query = { ownerId }; // Base query with ownerId
+    const query = {
+      ownerId,
+      status: "Active",
+      "block.isBlocked": false,
+    };
 
     // Search functionality
     if (searchTerm) {
@@ -299,7 +303,7 @@ const getAllCompanyProducts = async (req, res) => {
 
     // Execute query with pagination
     const products = await ProductModel.find(query)
-      .select("basicDetails images") // Select only the needed fields
+      .select("basicDetails images status block createdAt updatedAt") // Include block in the select
       .sort({ createdAt: -1 }) // Sort by creation date
       .skip(skip)
       .limit(limitNum);
@@ -308,15 +312,39 @@ const getAllCompanyProducts = async (req, res) => {
     const totalProducts = await ProductModel.countDocuments(query);
     const totalPages = Math.ceil(totalProducts / limitNum);
 
+    // Date formatter for 'dd-mm-yy'
+    const formatDate = (date) => {
+      return new Intl.DateTimeFormat("en-US", {
+        weekday: "long",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }).format(new Date(date));
+    };
+
     // Transform the data for response
     const transformedProducts = products.map((product) => ({
       id: product._id,
+      block: {
+        isBlocked: product.block.isBlocked,
+        reason: product.block.reason,
+        blockedBy: product.block.blockedBy,
+        blockedAt: product.block.blockedAt
+          ? formatDate(product.block.blockedAt)
+          : null,
+      },
+      status: product.status,
       productId: product.basicDetails.id,
       name: product.basicDetails.name,
       slug: product.basicDetails.slug,
       price: product.basicDetails.price,
       description: product.basicDetails.description,
-      image: product.images[0]?.url || null, // Get the first image URL
+      image: product.images[0]?.url || null,
+      image1: product.images[1]?.url || null,
+      image2: product.images[2]?.url || null,
+      image3: product.images[3]?.url || null,
+      createdAt: formatDate(product.createdAt),
+      updatedAt: formatDate(product.updatedAt),
     }));
 
     sendResponse(res, 200, true, "Products fetched successfully", {
@@ -338,7 +366,6 @@ const getAllCompanyProducts = async (req, res) => {
 };
 
 const getProductById = async (req, res) => {
-  console.log("hi");
   try {
     const { productId } = req.params;
     const ownerId = req.user.id;
@@ -357,6 +384,8 @@ const getProductById = async (req, res) => {
     // Transform the data for response
     const transformedProduct = {
       id: product._id,
+      status: product.status,
+      block: product.block,
       category: product.category,
       basicDetails: product.basicDetails,
       colors: product.colors,
@@ -408,8 +437,11 @@ const getCompanyProducts = async (req, res) => {
     }
 
     // Build query to fetch products for the given ownerId
-    const query = { ownerId };
-
+    const query = {
+      ownerId,
+      status: "Active",
+      "block.isBlocked": false,
+    };
     if (search) {
       query.$or = [
         { "basicDetails.name": { $regex: search, $options: "i" } },
@@ -1066,6 +1098,96 @@ const getProductNames = async (req, res) => {
   }
 };
 
+const toggleVisibility = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const product = await ProductModel.findById(id);
+
+    if (!product) {
+      console.warn(`Product with ID ${id} not found.`);
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Toggle status between Active and In_Active
+    if (product.status === "Active") {
+      product.status = "In_Active";
+      console.log(`Deactivating product: ${id}`);
+    } else {
+      product.status = "Active";
+      console.log(`Activating product: ${id}`);
+    }
+
+    const updatedProduct = await product.save();
+
+    console.log(
+      `Product status toggled successfully for ID: ${updatedProduct._id}`
+    );
+    return res.status(200).json({
+      message:
+        product.status === "In_Active"
+          ? "Product deactivated successfully"
+          : "Product activated successfully",
+      product: {
+        id: updatedProduct._id,
+        status: updatedProduct.status,
+      },
+    });
+  } catch (error) {
+    console.error("Error toggling product status:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Controller function to get product stats (share count, total views, and total enquiries)
+const getProductStats = async (req, res) => {
+  const { id } = req.params; // Get the product ID from params
+
+  try {
+    // Aggregation to get product stats
+    const productStats = await ProductModel.aggregate([
+      {
+        $match: { _id: new mongoose.Types.ObjectId(id) }, // Match the product by ID
+      },
+      {
+        $project: {
+          _id: 1,
+          totalViews: 1,
+          shareCount: 1,
+        },
+      },
+      {
+        $lookup: {
+          from: "enquiries", // Lookup the Enquiry model (MongoDB collection)
+          localField: "_id", // Field in Product model to join with
+          foreignField: "productId", // Field in Enquiry model to join with
+          as: "enquiries", // Output the result in a new "enquiries" field
+        },
+      },
+      {
+        $project: {
+          totalViews: 1,
+          shareCount: 1,
+          totalEnquiries: { $size: "$enquiries" }, // Get the count of enquiries
+        },
+      },
+    ]);
+
+    if (productStats.length === 0) {
+      return sendResponse(res, 404, "Product not found");
+    }
+
+    // Return product stats using sendResponse
+    return sendResponse(res, 200, "Product stats fetched successfully", {
+      productId: id,
+      totalViews: productStats[0].totalViews,
+      shareCount: productStats[0].shareCount,
+      totalEnquiries: productStats[0].totalEnquiries,
+    });
+  } catch (error) {
+    console.error("Error fetching product stats:", error);
+    return sendResponse(res, 500, "Server error");
+  }
+};
 module.exports = {
   test,
   createProduct,
@@ -1083,4 +1205,6 @@ module.exports = {
   getVisitorInsights,
   getOwnerProductViewLocations,
   getProductNames,
+  toggleVisibility,
+  getProductStats,
 };

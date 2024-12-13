@@ -63,7 +63,7 @@ exports.getAllProducts = async (req, res) => {
     const {
       searchTerm = "",
       page = 1,
-      limit = 10,
+      limit = 20,
       category,
       subcategory,
       userId,
@@ -74,7 +74,11 @@ exports.getAllProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Build query for filtering
-    const query = {};
+    // Build query for filtering
+    const query = {
+      status: "Active", // Ensure status is Active
+      "block.isBlocked": false, // Ensure isBlocked is false
+    };
     if (searchTerm) {
       query.$or = [
         { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
@@ -185,7 +189,7 @@ exports.getSearchProducts = async (req, res) => {
     const {
       searchTerm = "",
       page = 1,
-      limit = 10,
+      limit = 20,
       category,
       subcategory,
     } = req.query;
@@ -193,8 +197,11 @@ exports.getSearchProducts = async (req, res) => {
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
-    let query = {};
 
+    const query = {
+      status: "Active",
+      "block.isBlocked": false,
+    };
     // Build query
     if (searchTerm) {
       query.$or = [
