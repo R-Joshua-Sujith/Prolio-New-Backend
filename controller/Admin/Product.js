@@ -118,18 +118,18 @@ const getAllProducts = async (req, res) => {
       },
       data: formattedProducts,
       links: {
-        self: `/api/products?ownerId=${ownerId}&page=${page}&limit=${limit}`,
-        first: `/api/products?ownerId=${ownerId}&page=1&limit=${limit}`,
-        last: `/api/products?ownerId=${ownerId}&page=${Math.ceil(
+        self: `/products?ownerId=${ownerId}&page=${page}&limit=${limit}`,
+        first: `/products?ownerId=${ownerId}&page=1&limit=${limit}`,
+        last: `/products?ownerId=${ownerId}&page=${Math.ceil(
           total / limit
         )}&limit=${limit}`,
         next:
           page * limit < total
-            ? `/api/products?ownerId=${ownerId}&page=${page + 1}&limit=${limit}`
+            ? `/products?ownerId=${ownerId}&page=${page + 1}&limit=${limit}`
             : null,
         prev:
           page > 1
-            ? `/api/products?ownerId=${ownerId}&page=${page - 1}&limit=${limit}`
+            ? `/products?ownerId=${ownerId}&page=${page - 1}&limit=${limit}`
             : null,
       },
     });

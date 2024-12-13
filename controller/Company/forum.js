@@ -219,37 +219,70 @@ exports.getOwnForums = async (req, res) => {
 exports.getAllForums = async (req, res) => {
   try {
     const requestingUserId = req.user.id;
+    const { page = 1, limit = 10, search = "" } = req.query;
 
-    // Fetch forums excluding user's own
-    const forums = await ForumModel.find({
+    // Ensure page and limit are integers
+    const currentPage = parseInt(page, 10) || 1;
+    const pageSize = parseInt(limit, 10) || 10;
+
+    // Search filter
+    const searchFilter = search
+      ? {
+          $or: [
+            { forumName: { $regex: search, $options: "i" } },
+            { forumDescription: { $regex: search, $options: "i" } },
+            {
+              "ownerId.companyDetails.companyInfo.companyName": {
+                $regex: search,
+                $options: "i",
+              },
+            },
+          ],
+        }
+      : {};
+    // Query to fetch forums excluding user's own
+    const query = {
       isActive: true,
+      isBlocked: false,
       ownerId: { $ne: requestingUserId },
-    })
+      ...searchFilter,
+    };
+
+    // Count total matching documents
+    const totalCount = await ForumModel.countDocuments(query);
+
+    // Fetch paginated forums
+    const forums = await ForumModel.find(query)
       .populate({
         path: "ownerId",
         select: "profile companyDetails",
       })
+      .skip((currentPage - 1) * pageSize)
+      .limit(pageSize)
       .lean()
       .exec();
 
-    // Add request status for each forum
-    const forumsWithDetails = Array.isArray(forums)
-      ? forums.map((forum) => ({
-          ...forum,
-          membersCount: forum.members?.length || 0,
-          // Explicitly check pendingRequests to maintain status
-          requestStatus: forum.pendingRequests?.some(
-            (id) => id.toString() === requestingUserId
-          )
-            ? "pending"
-            : "none",
-          isMember:
-            forum.members?.some((id) => id.toString() === requestingUserId) ||
-            false,
-        }))
-      : [];
+    // Add request status and member count for each forum
+    const forumsWithDetails = forums.map((forum) => ({
+      ...forum,
+      membersCount: forum.members?.length || 0,
+      requestStatus: forum.pendingRequests?.some(
+        (id) => id.toString() === requestingUserId
+      )
+        ? "pending"
+        : "none",
+      isMember:
+        forum.members?.some((id) => id.toString() === requestingUserId) ||
+        false,
+    }));
 
-    sendResponse(res, 200, "Forums retrieved successfully", forumsWithDetails);
+    // Response with pagination details
+    sendResponse(res, 200, "Forums retrieved successfully", {
+      forums: forumsWithDetails,
+      totalCount,
+      page: currentPage,
+      limit: pageSize,
+    });
   } catch (error) {
     console.error("Error fetching forums:", error);
     sendResponse(res, 500, "Error fetching forums", { error: error.message });
@@ -367,6 +400,23 @@ exports.sendJoinRequest = async (req, res) => {
 
     const updatedForum = await ForumModel.findById(forumId).lean();
 
+    // Get the user's company name or use the user's name
+    const sender = await CustomerModel.findById(userId).populate(
+      "companyDetails"
+    );
+    const companyName =
+      sender?.companyDetails?.companyInfo?.companyName ||
+      sender.name ||
+      "Individual";
+
+    // Notify the forum admin or relevant members about the join request
+    const adminNotificationData = {
+      userId: forum.ownerId, // Assuming forum.userId is the admin or owner
+      message: `${companyName} has sent a request to join your forum ${forum.forumName}`,
+      type: "join-request",
+    };
+    await NotificationService.createNotification(adminNotificationData, req.io);
+
     // Returning the updated forum data including the request status
     return res.status(200).json({
       message: "Join request sent successfully.",
@@ -425,6 +475,24 @@ exports.acceptJoinRequest = async (req, res) => {
 
     // Save the forum document
     await forum.save();
+
+    // Get the user's company name or use the user's name
+    const sender = await CustomerModel.findById(userId).populate(
+      "companyDetails"
+    );
+    const companyName =
+      sender?.companyDetails?.companyInfo?.companyName ||
+      sender.name ||
+      "Individual";
+
+    // Notify the user that their join request has been accepted
+    const userNotificationData = {
+      userId: userId,
+      message: `Your request to join ${forum.forumName} has been accepted by ${companyName}.`,
+      type: "join-request-accepted",
+    };
+    await NotificationService.createNotification(userNotificationData, req.io);
+
     return res
       .status(200)
       .json({ message: "User has been added to the forum successfully." });
@@ -439,9 +507,7 @@ exports.acceptJoinRequest = async (req, res) => {
 exports.rejectJoinRequest = async (req, res) => {
   const { forumId, userId } = req.params;
   const ownerId = req.user.id;
-
   try {
-    // Find the forum by ID
     const forum = await ForumModel.findById(forumId);
 
     if (!forum) {
@@ -467,11 +533,22 @@ exports.rejectJoinRequest = async (req, res) => {
       (id) => id.toString() !== userId
     );
 
-    // Save the forum document
     await forum.save();
 
-    // Optionally, notify the user that their request has been rejected
-    // Example: sendNotification(userId, `Your request to join the forum '${forum.forumName}' has been rejected.`);
+    // Get the forum owner's company name
+    const owner = await CustomerModel.findById(ownerId).populate(
+      "companyDetails"
+    );
+    const companyName =
+      owner?.companyDetails?.companyInfo?.companyName || "Individual";
+
+    // Send notification to the user whose request was declined
+    const notificationData = {
+      userId: userId,
+      message: `Your request to join ${forum.forumName} has been declined by ${companyName}.`,
+      type: "join-request-declined",
+    };
+    await NotificationService.createNotification(notificationData, req.io);
 
     return res.status(200).json({
       message: "The user's request to join the forum has been rejected.",
@@ -503,6 +580,7 @@ exports.getForums = async (req, res) => {
     const forums = await ForumModel.find({
       $or: [{ ownerId: ownerId }, { members: ownerId }],
       isActive: true,
+      isBlocked: false,
     });
 
     console.log("Forums retrieved successfully:", forums);
@@ -687,7 +765,10 @@ exports.getAllCustomers = async (req, res) => {
           ],
         }
       : {};
-
+    // Exclude the authenticated user
+    if (req.user && req.user?.id) {
+      searchFilter._id = { $ne: req.user?.id };
+    }
     // Calculate the number of documents to skip
     const skip = (pageNumber - 1) * limitNumber;
 
@@ -735,6 +816,8 @@ const getForumById = async (forumId) => {
 exports.sendInvitations = async (req, res) => {
   const { forumId } = req.params;
   const { inviteEmails } = req.body;
+  const senderId = req.user?.id;
+
   console.log("forumID", "--------->", forumId);
 
   try {
@@ -743,7 +826,7 @@ exports.sendInvitations = async (req, res) => {
       return sendResponse(res, 400, false, "Invalid request");
     }
 
-    const forum = await getForumById(forumId);
+    const forum = await ForumModel.findById(forumId);
     if (!forum) {
       return sendResponse(res, 404, false, "Forum not found");
     }
@@ -751,34 +834,32 @@ exports.sendInvitations = async (req, res) => {
     const invitedUsers = await CustomerModel.find({
       email: { $in: inviteEmails },
     });
+
     const invitedUserIds = invitedUsers.map((owner) => owner._id);
     forum.invitedUsers.push(...invitedUserIds);
     await forum.save();
 
-    // Send notifications to the invited users
-    for (const invitee of invitedUsers) {
-      const notification = new Notification({
-        ownerId: invitee._id,
-        message: `You have been invited to join the forum: ${forum.forumName}`,
-        forumId: forum._id,
-        type: "invite",
-      });
-      await notification.save();
-      console.log(
-        `Notification created for user ${invitee._id}:`,
-        notification
-      );
+    // Get the company name of the user sending the invitation
+    const sender = await CustomerModel.findById(senderId).populate(
+      "companyDetails"
+    ); // Assuming companyDetails is populated
+    const companyName =
+      sender?.companyDetails?.companyInfo?.companyName || "Individual"; // Use "Individual" if company name is not available
 
-      // Emit notification to the user if they are online (via socket.io)
-      if (req.io) {
-        req.io.to(invitee._id.toString()).emit("notification", notification);
-        console.log(`Notification sent to user ${invitee._id.toString()}`);
-      } else {
-        console.log(
-          `Socket.io not available for user ${invitee._id.toString()}`
-        );
-      }
-    }
+    // Send notifications to invited users
+    const notificationsData = invitedUsers.map((user) => {
+      return {
+        userId: user._id,
+        message: `You have been invited by ${companyName} to join the forum ${forum.forumName}.`,
+        type: "forum-invitation",
+      };
+    });
+
+    // Create notifications in batch
+    await NotificationService.createBatchNotifications(
+      notificationsData,
+      req.io
+    );
 
     return sendResponse(
       res,
@@ -794,7 +875,6 @@ exports.sendInvitations = async (req, res) => {
     });
   }
 };
-
 /**
  * Controller function to check the invited users for a specific forum.
  *
@@ -872,7 +952,7 @@ exports.leaveForum = async (req, res) => {
 
 exports.getOwnerForumInvites = async (req, res) => {
   try {
-    const userId = req.user.id; // Assuming you have auth middleware setting req.user
+    const userId = req.user?.id; // Assuming you have auth middleware setting req.user
 
     // Find all forums owned by the user
     const forums = await ForumModel.find({
@@ -956,13 +1036,20 @@ exports.cancelForumInvite = async (req, res) => {
       $pull: { invitedUsers: userId },
     });
 
-    // // Optionally, you might want to create a notification or log the cancellation
-    // await NotificationModel.create({
-    //   userId: userId,
-    //   type: "FORUM_INVITE_CANCELLED",
-    //   message: `Invitation to forum "${forum.forumName}" has been cancelled`,
-    //   forumId: forumId,
-    // });
+    // Create a notification for the user whose invite was canceled
+    const invitedUser = await CustomerModel.findById(userId); // Fetch the user details
+    const companyName = forum.ownerId
+      ? (await CustomerModel.findById(forum.ownerId))?.companyDetails
+          ?.companyInfo?.companyName
+      : "Individual";
+
+    // Send the notification
+    const notificationData = {
+      userId: userId,
+      message: `${companyName} has canceled your invitation to join the forum ${forum.forumName}.`,
+      type: "forum-invite-cancel",
+    };
+    await NotificationService.createNotification(notificationData, req.io);
 
     return res.status(200).json({
       success: true,
@@ -1193,6 +1280,21 @@ exports.acceptForumInvitation = async (req, res) => {
         message: "Forum not found or no invitation exists",
       });
     }
+    const forumOwnerId = forum.ownerId?._id.toString();
+    const userName = req.user?.name; // Assuming `name` field is available in req.user
+    const userCompany = req.user.companyDetails?.companyInfo?.companyName; // Assuming company details are part of req.user
+
+    // Build notification message
+    const message = userCompany
+      ? `${userName} from ${userCompany} has accepted the invitation to join the forum '${forum.forumName}'.`
+      : `${userName} (Individual) has accepted the invitation to join the forum '${forum.forumName}'.`;
+
+    await NotificationService.createNotification({
+      userId: forumOwnerId,
+      message,
+      type: "Forum Invitation",
+      io: req.app.get("io"), // Passing Socket.io instance
+    });
 
     res.status(200).json({
       success: true,
