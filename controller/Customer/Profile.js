@@ -6,65 +6,80 @@ const bcrypt = require("bcryptjs");
 /**
  * Update Customer Profile
  */
+
 exports.updateCustomerProfile = async (req, res) => {
-  const customerId = req.user?.id; // Assuming JWT middleware attaches user info
-  const updates = req.body;
+  const customerId = req.user?.id;
+  const { name, email, phone, newPassword } = req.body;
+  console.log("Request Body:", req.body);
   const file = req.file;
 
   try {
-    // Fetch the customer by ID
+    // Fetch the customer
     const customer = await Customer.findById(customerId);
+    console.log("Customer Before Update:", customer);
+
     if (!customer) {
-      return sendResponse(res, 404, false, null, "Customer not found.");
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found.",
+        data: null,
+      });
+    }
+
+    // Password update logic
+    if (newPassword) {
+      console.log("New Password:", newPassword);
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+      console.log("Hashed Password:", hashedPassword);
+      customer.password = hashedPassword;
     }
 
     // Handle profile image update
     if (file) {
-      // Delete old profile image if exists
       if (customer.profile?.url) {
         await deleteFromS3(customer.profile.url);
       }
-      // Upload the new profile image to S3
       const uploadedImage = await uploadToS3(
         file.buffer,
         file.originalname,
         file.mimetype,
         "customer-profiles"
       );
-      updates.profile = {
+      customer.profile = {
         url: uploadedImage.url,
         publicId: uploadedImage.filename,
       };
     }
 
-    // Update password if provided
-    if (updates.password) {
-      const salt = await bcrypt.genSalt(10);
-      updates.password = await bcrypt.hash(updates.password, salt);
-    }
+    // Update other fields
+    if (name) customer.name = name;
+    if (email) customer.email = email;
+    if (phone) customer.phone = phone;
 
-    // Update only allowed fields
-    const allowedFields = ["name", "email", "phone", "profile", "password"];
-    allowedFields.forEach((field) => {
-      if (updates[field] !== undefined) {
-        customer[field] = updates[field];
-      }
+    // Save the updated customer
+    const updatedCustomer = await customer.save();
+    console.log("Updated Customer:", updatedCustomer);
+
+    const responseData = {
+      _id: updatedCustomer._id,
+      name: updatedCustomer.name,
+      email: updatedCustomer.email,
+      phone: updatedCustomer.phone,
+      profile: updatedCustomer.profile,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully.",
+      data: responseData,
     });
-
-    // Save the updated customer document
-    await customer.save();
-
-    // Return the updated customer
-    return sendResponse(
-      res,
-      200,
-      true,
-      customer,
-      "Profile updated successfully."
-    );
   } catch (error) {
     console.error("Error updating profile:", error);
-    return sendResponse(res, 500, false, null, "Internal server error.");
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected error occurred while updating the profile.",
+    });
   }
 };
 
@@ -72,8 +87,8 @@ exports.getCustomerProfile = async (req, res) => {
   try {
     const userId = req.user?.id;
 
-    // Exclude password field when fetching profile
-    const customer = await Customer.findById(userId).select("-password");
+    // Fetch the customer profile, including the password
+    const customer = await Customer.findById(userId);
 
     if (!customer) {
       return sendResponse(res, 404, false, null, "Customer not found");
@@ -87,6 +102,7 @@ exports.getCustomerProfile = async (req, res) => {
       "Customer profile fetched successfully"
     );
   } catch (error) {
+    console.error("Error fetching customer profile:", error);
     sendResponse(
       res,
       500,

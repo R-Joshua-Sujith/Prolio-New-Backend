@@ -43,7 +43,7 @@ router.get(
 
 router.delete(
   "/delete-product/:id",
-  // companyVerify,
+  companyVerify,
   companyProductController.deleteProduct
 );
 
@@ -106,6 +106,16 @@ router.get(
   companyProductController.getProductNames
 );
 
+router.patch(
+  "/:id/toggle-visibility",
+  companyVerify,
+  companyProductController.toggleVisibility
+);
+router.get(
+  "/:id/stats",
+  // companyVerify,
+  companyProductController.getProductStats
+);
 module.exports = router;
 
 //test

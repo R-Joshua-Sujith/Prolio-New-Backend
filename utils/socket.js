@@ -56,7 +56,7 @@ const socketConnection = (io) => {
         // Populate user details before sending back to clients
         const populatedMessage = await Message.findById(
           newMessage._id
-        ).populate("ownerId", "firstName lastName email");
+        ).populate("ownerId", "name email profile");
 
         // Emit the new message to all users in the forum
         io.to(forumId).emit("message", populatedMessage);

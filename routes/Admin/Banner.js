@@ -28,11 +28,9 @@ router.delete(
   bannerController.deleteBanner
 );
 
-// Route to update the banner status
-router.patch(
-  "/update-banner-status/:id",
-  adminVerify,
-  bannerController.updateBannerStatus
-);
+router.get("/all-banners", bannerController.getAllBanners);
+
+// Define the route to toggle the banner status (by ID)
+router.patch("/:bannerId", bannerController.toggleBannerStatus);
 
 module.exports = router;

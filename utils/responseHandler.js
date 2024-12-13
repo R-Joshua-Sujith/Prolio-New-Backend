@@ -1,9 +1,8 @@
 /**
  * Function to handle and send standardized API responses.
  *
- * @param {Object} res - The Express response object used to send the response.
  * @param {number} statusCode - The HTTP status code for the response (e.g., 200 for success).
- * @param {boolean} success - Indicates if the request was successful or not (true/false).
+ * @param {boolean} success - A flag indicating if the request was successful or not (true/false).
  * @param {string} message - A descriptive message providing information about the request result.
  *
  * This function standardizes the API responses, ensuring consistency across the application.

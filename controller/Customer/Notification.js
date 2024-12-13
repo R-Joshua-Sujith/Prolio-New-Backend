@@ -6,15 +6,13 @@ const { sendResponse } = require("../../utils/responseHandler");
 // Retrieve User Notifications Endpoint
 exports.getNotifications = async (req, res) => {
   const userId = req.user?.id;
-  const { page = 1, limit = 20 } = req.query; // Default values
+  const { page = 1, limit = 5 } = req.query; // Default to 5 notifications per page
 
   try {
     const skip = (page - 1) * limit;
 
-    // Fetch unread notifications with pagination
-    const notifications = await Notification.find({
-      userId,
-    })
+    // Fetch notifications with pagination
+    const notifications = await Notification.find({ userId })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -25,15 +23,22 @@ exports.getNotifications = async (req, res) => {
       isRead: false,
     });
 
+    // Check if there are more notifications
+    const totalNotifications = await Notification.countDocuments({ userId });
+    const hasMore = skip + notifications.length < totalNotifications;
+
     return res.status(200).json({
       success: true,
       data: {
         notifications,
         unreadCount,
+        hasMore,
+        page: parseInt(page),
       },
       message: "Notifications retrieved successfully",
     });
   } catch (error) {
+    console.error("Notification retrieval error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve notifications",
@@ -255,12 +260,12 @@ exports.getUnreadMessageNotifications = async (req, res) => {
 
     // Paginated unread messages
     const messages = await Message.find(messagesQuery)
-      .populate("forumId", "forumName") // Populate forum details
+      .populate("forumId", "forumName forumImage")
       .populate("ownerId", "companyDetails.companyInfo.companyName")
-      .select("text attachment productLink readBy") // Include readBy field
-      .sort({ createdAt: -1 }) // Sort by most recent
-      .skip(skip) // Skip for pagination
-      .limit(parseInt(limit)); // Limit results per page
+      .select("text attachment productLink readBy")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
     // Add the read status to each message for the current user
     const messagesWithReadStatus = messages.map((message) => {

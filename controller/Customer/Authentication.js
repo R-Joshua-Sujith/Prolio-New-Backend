@@ -67,45 +67,49 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    // Validate input
     const { errors, isValid } = validateLoginInput(email, password);
     if (!isValid) {
       return res.status(400).json({ success: false, errors });
     }
 
+    // Check if customer exists
     const customer = await Customer.findOne({ email });
     if (!customer) {
       return res.status(401).json({
         success: false,
-        error: "User with this Email Dosen't Exist",
+        error: "User with this Email doesn't exist.",
       });
     }
 
-    const isPasswordValid = bcrypt.compare(password, customer.password);
+    // Validate password
+    const isPasswordValid = await bcrypt.compare(password, customer.password);
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        error: "Invalid Password",
+        error: "Invalid password.",
       });
     }
 
+    // Generate access token
     const accessToken = jwt.sign(
       {
         id: customer._id,
       },
       process.env.JWT_SECRET_KEY
     );
-    await customer.save();
 
     return res.status(200).json({
       success: true,
-      message: "Login successful",
+      message: "Login successful.",
       accessToken,
     });
   } catch (error) {
     console.error("Login error:", error);
     return res.status(500).json({
       success: false,
-      error: error.message,
+      error: "An unexpected error occurred.",
     });
   }
 };

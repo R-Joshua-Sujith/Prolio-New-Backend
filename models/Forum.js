@@ -35,6 +35,10 @@ const forumSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
 
     members: [
       {
