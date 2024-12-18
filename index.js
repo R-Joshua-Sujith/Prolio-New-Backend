@@ -10,6 +10,7 @@ const { getServerStatusMessage } = require("./utils/serverStatus");
 const customerRoutes = require("./routes/MainRoutes/Customer");
 const companyRoutes = require("./routes/MainRoutes/Company");
 const adminRoutes = require("./routes/MainRoutes/Admin");
+const influencerRoutes = require("./routes/MainRoutes/Influencer");
 const { socketConnection, socketAuthMiddleware } = require("./utils/socket");
 
 dotenv.config();
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
 app.use("/customer", customerRoutes);
 app.use("/company", companyRoutes);
 app.use("/admin", adminRoutes);
+app.use("/influencer", influencerRoutes);
 
 // Root endpoint for server status
 app.get("/", (req, res) => {
