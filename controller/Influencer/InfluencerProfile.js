@@ -111,6 +111,7 @@ exports.updateInfluencer = async (req, res) => {
         "User has not applied for influencer registration yet."
       );
     }
+
     const {
       address,
       country,
@@ -121,7 +122,6 @@ exports.updateInfluencer = async (req, res) => {
       socialMediaAccounts,
       documents,
     } = req.body;
-
     // Prepare to collect new uploaded documents
     const uploadedDocuments = [];
 
@@ -148,23 +148,83 @@ exports.updateInfluencer = async (req, res) => {
       }
     }
 
-    // Update logic for documents
+    // Ensure we have the latest influencer details
+    const currentInfluencerDetails = existingUser.influencerDetails || {};
+
+    // Create update data, preserving existing social media accounts if not provided
     const updateData = {
-      ...(existingUser.influencerDetails || {}),
+      ...currentInfluencerDetails,
+      address: address || currentInfluencerDetails.address,
+      country: country || currentInfluencerDetails.country,
+      city: city || currentInfluencerDetails.city,
+      state: state || currentInfluencerDetails.state,
+      pincode: pincode || currentInfluencerDetails.pincode,
+      bio: bio || currentInfluencerDetails.bio,
     };
 
-    // Merge existing and new documents (no deletion from S3)
-    const existingDocs = existingUser.influencerDetails?.documents || [];
+    // Handle Social Media Accounts
+    const existingAccounts = currentInfluencerDetails.socialMediaAccounts || [];
+
+    // Process Social Media Accounts
+    let processedSocialMediaAccounts = [...existingAccounts];
+
+    // Check if socialMediaAccounts is provided in the request
+    if (socialMediaAccounts) {
+      // Parse socialMediaAccounts if it's a string
+      const incomingSocialAccounts =
+        typeof socialMediaAccounts === "string"
+          ? JSON.parse(socialMediaAccounts)
+          : socialMediaAccounts;
+
+      // Process and merge incoming accounts
+      incomingSocialAccounts.forEach((account) => {
+        // Validate required fields
+        if (!account.platform || !account.handle) {
+          return; // Skip invalid accounts
+        }
+
+        // Check if this platform already exists
+        const existingAccountIndex = processedSocialMediaAccounts.findIndex(
+          (existing) =>
+            existing.platform.toLowerCase() === account.platform.toLowerCase()
+        );
+
+        if (existingAccountIndex !== -1) {
+          // Update existing account
+          processedSocialMediaAccounts[existingAccountIndex] = {
+            ...processedSocialMediaAccounts[existingAccountIndex],
+            ...account,
+            _id:
+              processedSocialMediaAccounts[existingAccountIndex]._id ||
+              new mongoose.Types.ObjectId(),
+          };
+        } else {
+          // Add new account
+          processedSocialMediaAccounts.push({
+            _id: new mongoose.Types.ObjectId(),
+            ...account,
+          });
+        }
+      });
+    }
+
+    // Update social media accounts
+    updateData.socialMediaAccounts = processedSocialMediaAccounts;
+
+    // Handle Documents
+    const existingDocs = currentInfluencerDetails.documents || [];
     const incomingDocs = documents
-      ? JSON.parse(documents).map((doc) => ({
-          _id: doc._id || new mongoose.Types.ObjectId(),
-          url: doc.url,
-          publicId: doc.publicId,
-          documentType: doc.documentType || "Other",
-        }))
+      ? (typeof documents === "string" ? JSON.parse(documents) : documents).map(
+          (doc) => ({
+            _id: doc._id || new mongoose.Types.ObjectId(),
+            url: doc.url,
+            publicId: doc.publicId,
+            documentType: doc.documentType || "Other",
+          })
+        )
       : [];
 
-    // Combine documents without deleting the old ones
+    // Combine documents without duplicates
     const combinedDocs = [
       ...existingDocs,
       ...uploadedDocuments,
@@ -174,14 +234,7 @@ exports.updateInfluencer = async (req, res) => {
         index === self.findIndex((t) => t.publicId === doc.publicId)
     );
 
-    // Update other influencer details
-    if (address) updateData.address = address;
-    if (country) updateData.country = country;
-    if (city) updateData.city = city;
-    if (state) updateData.state = state;
-    if (pincode) updateData.pincode = pincode;
-    if (bio) updateData.bio = bio;
-
+    // Update documents
     updateData.documents = combinedDocs;
 
     // Save updated influencer data

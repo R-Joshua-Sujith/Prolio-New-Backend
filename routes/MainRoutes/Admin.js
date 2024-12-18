@@ -7,6 +7,7 @@ const adminReportProductRoutes = require("../Admin/ReportProduct");
 const adminCompanyForumRoutes = require("../Admin/CompanyForum");
 const adminAnalyticsRoutes = require("../Admin/Analytics");
 const adminProductsRoutes = require("../Admin/Product");
+const adminInfluencersRoutes = require("../Admin/InfluencerRoute");
 
 router.use("/auth", adminAuthRoutes);
 router.use("/banner", adminBannerRoutes);
@@ -16,5 +17,6 @@ router.use("/company-forum", adminCompanyForumRoutes);
 router.use("/report-product", adminReportProductRoutes);
 router.use("/analytics", adminAnalyticsRoutes);
 router.use("/products", adminProductsRoutes);
+router.use("/influencers", adminInfluencersRoutes);
 
 module.exports = router;

@@ -114,8 +114,6 @@ exports.getPendingCompanyUsers = async (req, res) => {
   }
 };
 
-
-
 (exports.updateCompanyStatus = async (req, res) => {
   try {
     const { companyId } = req.params;
@@ -172,6 +170,7 @@ exports.getPendingCompanyUsers = async (req, res) => {
       const { page = 1, limit = 10, search = "" } = req.query;
       const skip = (page - 1) * limit;
       const paginationLimit = parseInt(limit);
+
       const customers = await CustomerModel.aggregate([
         // Match customers with verified companies
         {
@@ -197,7 +196,7 @@ exports.getPendingCompanyUsers = async (req, res) => {
             totalForums: { $size: "$forums" },
           },
         },
-        // Select the fields you need in the response
+        // Project fields for the response, including influencer details
         {
           $project: {
             name: 1,
@@ -205,6 +204,8 @@ exports.getPendingCompanyUsers = async (req, res) => {
             status: 1,
             companyDetails: 1,
             totalForums: 1, // Include the forum count in the response
+            isInfluencer: 1, // Add influencer status
+            influencerDetails: 1, // Add influencer details
           },
         },
         // Pagination stage: Skip and limit the results
