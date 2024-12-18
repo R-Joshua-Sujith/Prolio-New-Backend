@@ -35,6 +35,7 @@ const customerSchema = new Schema(
     isInfluencer: {
       applied: { type: Boolean, default: false },
       verified: { type: Boolean, default: false },
+      rejected: { type: Boolean, default: false },
     },
     companyDetails: {
       companyInfo: {

@@ -5,7 +5,7 @@ const { adminVerify } = require("../../controller/Admin/Middleware/auth");
 
 router.get(
   "/all-CompanyForums/:customerId",
-  //   adminVerify,
+    adminVerify,
   CompanyForumController.getAllCompanyForums
 );
 
