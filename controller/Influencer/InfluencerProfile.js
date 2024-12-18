@@ -4,97 +4,196 @@ const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const mongoose = require("mongoose"); // Import mongoose for ObjectId
 
 // Controller function to register an influencer (with file upload handling)
+// exports.registerInfluencer = async (req, res) => {
+//   try {
+//     const userId = req.user?.id;
+//     const existingUser = await CustomerModel.findById(userId);
+
+//     if (!existingUser) {
+//       return sendResponse(res, 404, "User not found. Please register first.");
+//     }
+
+//     // Check if the user has already applied for influencer registration
+//     if (existingUser.isInfluencer.applied) {
+//       return sendResponse(
+//         res,
+//         400,
+//         "User has already applied for influencer registration."
+//       );
+//     }
+
+//     // Destructure influencer details from the request body
+//     const {
+//       address,
+//       country = "India",
+//       city,
+//       state,
+//       pincode,
+//       bio,
+//       socialMediaAccounts,
+//       documents,
+//     } = req.body;
+
+//     const uploadedDocuments = [];
+
+//     // Handle file uploads if provided
+//     if (req.files && req.files.length > 0) {
+//       for (let file of req.files) {
+//         const { buffer, originalname, mimetype } = file;
+//         // Upload the file to S3
+//         const uploadResponse = await uploadToS3(
+//           buffer,
+//           originalname,
+//           mimetype,
+//           "influencer-docs"
+//         );
+//         uploadedDocuments.push({
+//           filename: uploadResponse.filename,
+//           url: uploadResponse.url,
+//           publicId: uploadResponse.publicId,
+//         });
+//       }
+//     }
+
+//     // If documents are provided in the request body, use them; otherwise, use the uploaded ones
+//     const finalDocuments = documents
+//       ? documents.concat(uploadedDocuments)
+//       : uploadedDocuments;
+
+//     // Update influencer details for the existing user
+//     existingUser.isInfluencer.applied = true;
+//     existingUser.isInfluencer.verified = false;
+//     existingUser.influencerDetails = {
+//       address,
+//       country,
+//       city,
+//       state,
+//       pincode,
+//       bio,
+//       socialMediaAccounts, // Directly store the social media accounts array
+//       documents: finalDocuments,
+//     };
+
+//     // Save the updated user data
+//     await existingUser.save();
+
+//     // Send success response
+//     sendResponse(
+//       res,
+//       200,
+//       "Influencer application submitted successfully",
+//       existingUser
+//     );
+//   } catch (error) {
+//     console.error(error);
+//     sendResponse(
+//       res,
+//       500,
+//       "Error processing influencer registration",
+//       error.message
+//     );
+//   }
+// };
+
 exports.registerInfluencer = async (req, res) => {
   try {
     const userId = req.user?.id;
+    console.log("Body:", req.body);
     const existingUser = await CustomerModel.findById(userId);
 
     if (!existingUser) {
-      return sendResponse(res, 404, "User not found. Please register first.");
+      return sendResponse(res, 404, false, "User not found. Please register first.");
     }
 
-    // Check if the user has already applied for influencer registration
     if (existingUser.isInfluencer.applied) {
-      return sendResponse(
-        res,
-        400,
-        "User has already applied for influencer registration."
-      );
+      return sendResponse(res, 400, false, "User has already applied for influencer registration.");
     }
 
-    // Destructure influencer details from the request body
-    const {
-      address,
-      country = "India",
-      city,
-      state,
-      pincode,
-      bio,
-      socialMediaAccounts,
-      documents,
-    } = req.body;
-
+    // Parse the personal data from the request body
+    const personalData = JSON.parse(req.body.personalData);
+    
     const uploadedDocuments = [];
 
-    // Handle file uploads if provided
-    if (req.files && req.files.length > 0) {
-      for (let file of req.files) {
-        const { buffer, originalname, mimetype } = file;
-        // Upload the file to S3
-        const uploadResponse = await uploadToS3(
-          buffer,
-          originalname,
-          mimetype,
-          "influencer-docs"
-        );
-        uploadedDocuments.push({
-          filename: uploadResponse.filename,
-          url: uploadResponse.url,
-          publicId: uploadResponse.publicId,
-        });
+    // Handle file uploads
+    if (req.files) {
+      for (const [fieldName, fileArray] of Object.entries(req.files)) {
+        // Handle each file in the field
+        for (const file of fileArray) {
+          try {
+            const uploadResponse = await uploadToS3(
+              file.buffer,
+              file.originalname,
+              file.mimetype,
+              "influencer-docs"
+            );
+
+            uploadedDocuments.push({
+              type: fieldName, // pan_document, aadhar_document, other_documents, profile_photo
+              filename: uploadResponse.filename,
+              url: uploadResponse.url,
+              publicId: uploadResponse.filename // Using filename as publicId based on s3FileUploader implementation
+            });
+          } catch (uploadError) {
+            console.error(`Error uploading ${fieldName}:`, uploadError);
+            throw uploadError;
+          }
+        }
       }
     }
 
-    // If documents are provided in the request body, use them; otherwise, use the uploaded ones
-    const finalDocuments = documents
-      ? documents.concat(uploadedDocuments)
-      : uploadedDocuments;
+    // Update user with influencer details
+    try {
+      existingUser.isInfluencer.applied = true;
+      existingUser.isInfluencer.verified = false;
+      existingUser.influencerDetails = {
+        firstName: personalData.firstName,
+        lastName: personalData.lastName,
+        email: personalData.email,
+        mobileNumber: personalData.mobileNumber,
+        address: personalData.address,
+        country: personalData.country,
+        city: personalData.city,
+        state: personalData.state,
+        pincode: personalData.pincode,
+        bio: personalData.bio,
+        socialMediaAccounts: personalData.socialHandles,
+        documents: uploadedDocuments
+      };
 
-    // Update influencer details for the existing user
-    existingUser.isInfluencer.applied = true;
-    existingUser.isInfluencer.verified = false;
-    existingUser.influencerDetails = {
-      address,
-      country,
-      city,
-      state,
-      pincode,
-      bio,
-      socialMediaAccounts, // Directly store the social media accounts array
-      documents: finalDocuments,
-    };
+      await existingUser.save();
 
-    // Save the updated user data
-    await existingUser.save();
+      return sendResponse(
+        res,
+        200,
+        true,
+        "Influencer application submitted successfully",
+        existingUser
+      );
+    } catch (saveError) {
+      // If save fails, cleanup uploaded documents
+      if (uploadedDocuments.length > 0) {
+        for (let doc of uploadedDocuments) {
+          try {
+            await deleteFromS3(doc.publicId);
+          } catch (deleteError) {
+            console.error("Cleanup error:", deleteError);
+          }
+        }
+      }
 
-    // Send success response
-    sendResponse(
-      res,
-      200,
-      "Influencer application submitted successfully",
-      existingUser
-    );
+      throw saveError;
+    }
   } catch (error) {
-    console.error(error);
-    sendResponse(
+    console.error("General error:", error);
+    return sendResponse(
       res,
       500,
+      false,
       "Error processing influencer registration",
       error.message
     );
   }
 };
-
 exports.updateInfluencer = async (req, res) => {
   try {
     const userId = req.user?.id;
