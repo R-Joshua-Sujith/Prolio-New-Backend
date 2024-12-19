@@ -11,7 +11,7 @@ const LogsSchema = new mongoose.Schema(
     userModel: {
       type: String,
       required: true,
-      enum: ["Customer", "CompanyUser"],
+      enum: ["Customer", "CompanyUser", "Admin"],
     },
     targetId: {
       type: Schema.Types.ObjectId,
@@ -23,6 +23,7 @@ const LogsSchema = new mongoose.Schema(
       required: true,
       enum: [
         "Customer",
+        "Admin",
         "CompanyUser",
         "Role",
         "Enquiry",

@@ -4,97 +4,6 @@ const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
 const mongoose = require("mongoose"); // Import mongoose for ObjectId
 
 // Controller function to register an influencer (with file upload handling)
-// exports.registerInfluencer = async (req, res) => {
-//   try {
-//     const userId = req.user?.id;
-//     const existingUser = await CustomerModel.findById(userId);
-
-//     if (!existingUser) {
-//       return sendResponse(res, 404, "User not found. Please register first.");
-//     }
-
-//     // Check if the user has already applied for influencer registration
-//     if (existingUser.isInfluencer.applied) {
-//       return sendResponse(
-//         res,
-//         400,
-//         "User has already applied for influencer registration."
-//       );
-//     }
-
-//     // Destructure influencer details from the request body
-//     const {
-//       address,
-//       country = "India",
-//       city,
-//       state,
-//       pincode,
-//       bio,
-//       socialMediaAccounts,
-//       documents,
-//     } = req.body;
-
-//     const uploadedDocuments = [];
-
-//     // Handle file uploads if provided
-//     if (req.files && req.files.length > 0) {
-//       for (let file of req.files) {
-//         const { buffer, originalname, mimetype } = file;
-//         // Upload the file to S3
-//         const uploadResponse = await uploadToS3(
-//           buffer,
-//           originalname,
-//           mimetype,
-//           "influencer-docs"
-//         );
-//         uploadedDocuments.push({
-//           filename: uploadResponse.filename,
-//           url: uploadResponse.url,
-//           publicId: uploadResponse.publicId,
-//         });
-//       }
-//     }
-
-//     // If documents are provided in the request body, use them; otherwise, use the uploaded ones
-//     const finalDocuments = documents
-//       ? documents.concat(uploadedDocuments)
-//       : uploadedDocuments;
-
-//     // Update influencer details for the existing user
-//     existingUser.isInfluencer.applied = true;
-//     existingUser.isInfluencer.verified = false;
-//     existingUser.influencerDetails = {
-//       address,
-//       country,
-//       city,
-//       state,
-//       pincode,
-//       bio,
-//       socialMediaAccounts, // Directly store the social media accounts array
-//       documents: finalDocuments,
-//     };
-
-//     // Save the updated user data
-//     await existingUser.save();
-
-//     // Send success response
-//     sendResponse(
-//       res,
-//       200,
-//       "Influencer application submitted successfully",
-//       existingUser
-//     );
-//   } catch (error) {
-//     console.error(error);
-//     sendResponse(
-//       res,
-//       500,
-//       "Error processing influencer registration",
-//       error.message
-//     );
-//   }
-// };
-
 exports.registerInfluencer = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -128,10 +37,10 @@ exports.registerInfluencer = async (req, res) => {
             );
 
             uploadedDocuments.push({
-              type: fieldName, // pan_document, aadhar_document, other_documents, profile_photo
+              type: fieldName, 
               filename: uploadResponse.filename,
               url: uploadResponse.url,
-              publicId: uploadResponse.filename // Using filename as publicId based on s3FileUploader implementation
+              publicId: uploadResponse.filename
             });
           } catch (uploadError) {
             console.error(`Error uploading ${fieldName}:`, uploadError);
@@ -140,7 +49,6 @@ exports.registerInfluencer = async (req, res) => {
         }
       }
     }
-
     // Update user with influencer details
     try {
       existingUser.isInfluencer.applied = true;
@@ -210,6 +118,7 @@ exports.updateInfluencer = async (req, res) => {
         "User has not applied for influencer registration yet."
       );
     }
+
     const {
       address,
       country,
@@ -220,7 +129,6 @@ exports.updateInfluencer = async (req, res) => {
       socialMediaAccounts,
       documents,
     } = req.body;
-
     // Prepare to collect new uploaded documents
     const uploadedDocuments = [];
 
@@ -247,23 +155,83 @@ exports.updateInfluencer = async (req, res) => {
       }
     }
 
-    // Update logic for documents
+    // Ensure we have the latest influencer details
+    const currentInfluencerDetails = existingUser.influencerDetails || {};
+
+    // Create update data, preserving existing social media accounts if not provided
     const updateData = {
-      ...(existingUser.influencerDetails || {}),
+      ...currentInfluencerDetails,
+      address: address || currentInfluencerDetails.address,
+      country: country || currentInfluencerDetails.country,
+      city: city || currentInfluencerDetails.city,
+      state: state || currentInfluencerDetails.state,
+      pincode: pincode || currentInfluencerDetails.pincode,
+      bio: bio || currentInfluencerDetails.bio,
     };
 
-    // Merge existing and new documents (no deletion from S3)
-    const existingDocs = existingUser.influencerDetails?.documents || [];
+    // Handle Social Media Accounts
+    const existingAccounts = currentInfluencerDetails.socialMediaAccounts || [];
+
+    // Process Social Media Accounts
+    let processedSocialMediaAccounts = [...existingAccounts];
+
+    // Check if socialMediaAccounts is provided in the request
+    if (socialMediaAccounts) {
+      // Parse socialMediaAccounts if it's a string
+      const incomingSocialAccounts =
+        typeof socialMediaAccounts === "string"
+          ? JSON.parse(socialMediaAccounts)
+          : socialMediaAccounts;
+
+      // Process and merge incoming accounts
+      incomingSocialAccounts.forEach((account) => {
+        // Validate required fields
+        if (!account.platform || !account.handle) {
+          return; // Skip invalid accounts
+        }
+
+        // Check if this platform already exists
+        const existingAccountIndex = processedSocialMediaAccounts.findIndex(
+          (existing) =>
+            existing.platform.toLowerCase() === account.platform.toLowerCase()
+        );
+
+        if (existingAccountIndex !== -1) {
+          // Update existing account
+          processedSocialMediaAccounts[existingAccountIndex] = {
+            ...processedSocialMediaAccounts[existingAccountIndex],
+            ...account,
+            _id:
+              processedSocialMediaAccounts[existingAccountIndex]._id ||
+              new mongoose.Types.ObjectId(),
+          };
+        } else {
+          // Add new account
+          processedSocialMediaAccounts.push({
+            _id: new mongoose.Types.ObjectId(),
+            ...account,
+          });
+        }
+      });
+    }
+
+    // Update social media accounts
+    updateData.socialMediaAccounts = processedSocialMediaAccounts;
+
+    // Handle Documents
+    const existingDocs = currentInfluencerDetails.documents || [];
     const incomingDocs = documents
-      ? JSON.parse(documents).map((doc) => ({
-          _id: doc._id || new mongoose.Types.ObjectId(),
-          url: doc.url,
-          publicId: doc.publicId,
-          documentType: doc.documentType || "Other",
-        }))
+      ? (typeof documents === "string" ? JSON.parse(documents) : documents).map(
+          (doc) => ({
+            _id: doc._id || new mongoose.Types.ObjectId(),
+            url: doc.url,
+            publicId: doc.publicId,
+            documentType: doc.documentType || "Other",
+          })
+        )
       : [];
 
-    // Combine documents without deleting the old ones
+    // Combine documents without duplicates
     const combinedDocs = [
       ...existingDocs,
       ...uploadedDocuments,
@@ -273,14 +241,7 @@ exports.updateInfluencer = async (req, res) => {
         index === self.findIndex((t) => t.publicId === doc.publicId)
     );
 
-    // Update other influencer details
-    if (address) updateData.address = address;
-    if (country) updateData.country = country;
-    if (city) updateData.city = city;
-    if (state) updateData.state = state;
-    if (pincode) updateData.pincode = pincode;
-    if (bio) updateData.bio = bio;
-
+    // Update documents
     updateData.documents = combinedDocs;
 
     // Save updated influencer data
