@@ -1,5 +1,8 @@
 const CustomerModel = require("../../models/Customer");
 const { sendResponse } = require("../../utils/responseHandler");
+const { createLogs } = require("../Company/Log");
+const log = require("../../models/Logs");
+const NotificationService = require("../../utils/notificationService");
 const mongoose = require("mongoose");
 
 // Function to get all customers who have applied as influencers
@@ -70,14 +73,7 @@ const updateInfluencerStatus = async (req, res) => {
   try {
     const { influencerId } = req.params;
     const { action } = req.body; // 'verified' or 'rejected'
-
-    // Validate action input
-    // if (!["verified", "rejected"].includes(action)) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Invalid action. Use 'verified' or 'rejected'.",
-    //   });
-    // }
+    const adminId = req.user?.id; // Assuming `req.user` contains the admin's info
 
     // Update the influencer's status
     const updatedInfluencer = await CustomerModel.findByIdAndUpdate(
@@ -91,13 +87,33 @@ const updateInfluencerStatus = async (req, res) => {
       { new: true } // Return the updated document
     );
 
-    // Check if the influencer exists
     if (!updatedInfluencer) {
       return res.status(404).json({
         success: false,
         message: "Influencer not found",
       });
     }
+
+    // Create log for the status change
+    await createLogs({
+      userId: adminId, // Admin who performed the action
+      userModel: "Admin",
+      targetId: influencerId, // Influencer affected by the action
+      targetModel: "Customer",
+      action: `Influencer status updated to ${action}`,
+    });
+
+    // Send notification to the influencer
+    const message =
+      action === "verified"
+        ? "Your influencer application has been verified by Prolio. Welcome aboard!"
+        : "Your influencer application was rejected by Prolio. Please Contact support for details.";
+
+    await NotificationService.createNotification({
+      userId: influencerId,
+      message,
+      type: "status-update",
+    });
 
     // Send success response
     res.status(200).json({
