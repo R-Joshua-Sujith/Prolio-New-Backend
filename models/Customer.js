@@ -67,6 +67,18 @@ const customerSchema = new Schema(
       ],
     },
     influencerDetails: { type: mongoose.Schema.Types.Mixed },
+    influencerCompanies: [
+      {
+        
+        companyId: { type: Schema.Types.ObjectId, ref: "Customer" },
+        productIds: [
+          {
+            type: Schema.Types.ObjectId,
+            ref: "Product",
+          },
+        ],
+      },
+    ],
     wishList: [
       {
         type: Schema.Types.ObjectId,

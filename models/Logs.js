@@ -24,6 +24,7 @@ const LogsSchema = new mongoose.Schema(
       enum: [
         "Customer",
         "Admin",
+        "Influencer",
         "CompanyUser",
         "Role",
         "Enquiry",

@@ -72,10 +72,9 @@ const getInfluencers = async (req, res) => {
 const updateInfluencerStatus = async (req, res) => {
   try {
     const { influencerId } = req.params;
-    const { action } = req.body; // 'verified' or 'rejected'
-    const adminId = req.user?.id; // Assuming `req.user` contains the admin's info
+    const { action } = req.body; 
+    const adminId = req.user?.id; 
 
-    // Update the influencer's status
     const updatedInfluencer = await CustomerModel.findByIdAndUpdate(
       influencerId,
       {
@@ -84,7 +83,7 @@ const updateInfluencerStatus = async (req, res) => {
           "isInfluencer.rejected": action === "rejected",
         },
       },
-      { new: true } // Return the updated document
+      { new: true }
     );
 
     if (!updatedInfluencer) {
@@ -99,7 +98,7 @@ const updateInfluencerStatus = async (req, res) => {
       userId: adminId, // Admin who performed the action
       userModel: "Admin",
       targetId: influencerId, // Influencer affected by the action
-      targetModel: "Customer",
+      targetModel: "Influencer",
       action: `Influencer status updated to ${action}`,
     });
 
