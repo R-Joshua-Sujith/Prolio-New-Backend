@@ -28,6 +28,12 @@ router.patch(
   influencerController.updateInfluencer
 );
 
+router.patch(
+  "/apply-badge",
+  influencerVerify,
+  influencerController.applyForBadge
+);
+
 router.delete(
   "/delete-documents/:docId",
   influencerVerify,

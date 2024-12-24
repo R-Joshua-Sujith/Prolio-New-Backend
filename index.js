@@ -4,8 +4,9 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const http = require("http");
+const morgan = require("morgan");
+const helmet = require("helmet");
 const { Server } = require("socket.io");
-const { uploadToS3 } = require("./utils/s3FileUploader");
 const { getServerStatusMessage } = require("./utils/serverStatus");
 const customerRoutes = require("./routes/MainRoutes/Customer");
 const companyRoutes = require("./routes/MainRoutes/Company");
@@ -18,6 +19,8 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(cookieParser());
+app.use(helmet());
+app.use(morgan("dev"));
 
 // Connect to MongoDB
 mongoose
@@ -51,8 +54,7 @@ app.get("/", (req, res) => {
   res.send(getServerStatusMessage());
 });
 
-// Use the authentication middleware for socket connection
-// Use the socket connection handler
+// Use the socket connection authentication middleware for socket connection
 io.use(socketAuthMiddleware);
 socketConnection(io);
 
