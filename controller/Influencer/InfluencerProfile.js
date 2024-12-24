@@ -1,9 +1,9 @@
 const CustomerModel = require("../../models/Customer");
 const { sendResponse } = require("../../utils/responseHandler");
 const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
-const mongoose = require("mongoose"); // Import mongoose for ObjectId
+const mongoose = require("mongoose");
 
-// Controller function to register an influencer (with file upload handling)
+// Controller function to register an influencer (with file upload handling)exports.
 exports.registerInfluencer = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -11,22 +11,31 @@ exports.registerInfluencer = async (req, res) => {
     const existingUser = await CustomerModel.findById(userId);
 
     if (!existingUser) {
-      return sendResponse(res, 404, false, "User not found. Please register first.");
+      return sendResponse(
+        res,
+        404,
+        false,
+        "User not found. Please register first."
+      );
     }
 
     if (existingUser.isInfluencer.applied) {
-      return sendResponse(res, 400, false, "User has already applied for influencer registration.");
+      return sendResponse(
+        res,
+        400,
+        false,
+        "User has already applied for influencer registration."
+      );
     }
 
     // Parse the personal data from the request body
     const personalData = JSON.parse(req.body.personalData);
-    
+
     const uploadedDocuments = [];
 
     // Handle file uploads
     if (req.files) {
       for (const [fieldName, fileArray] of Object.entries(req.files)) {
-        // Handle each file in the field
         for (const file of fileArray) {
           try {
             const uploadResponse = await uploadToS3(
@@ -36,11 +45,13 @@ exports.registerInfluencer = async (req, res) => {
               "influencer-docs"
             );
 
+            // Generate an ObjectId for the document
             uploadedDocuments.push({
-              type: fieldName, 
+              _id: new mongoose.Types.ObjectId(),
+              type: fieldName,
               filename: uploadResponse.filename,
               url: uploadResponse.url,
-              publicId: uploadResponse.filename
+              publicId: uploadResponse.filename,
             });
           } catch (uploadError) {
             console.error(`Error uploading ${fieldName}:`, uploadError);
@@ -49,15 +60,16 @@ exports.registerInfluencer = async (req, res) => {
         }
       }
     }
+
     // Update user with influencer details
     try {
       existingUser.isInfluencer.applied = true;
       existingUser.isInfluencer.verified = false;
       existingUser.influencerDetails = {
-        firstName: personalData.firstName,
-        lastName: personalData.lastName,
-        email: personalData.email,
-        mobileNumber: personalData.mobileNumber,
+        // firstName: personalData.firstName,
+        // lastName: personalData.lastName,
+        // email: personalData.email,
+        // mobileNumber: personalData.mobileNumber,
         address: personalData.address,
         country: personalData.country,
         city: personalData.city,
@@ -65,7 +77,7 @@ exports.registerInfluencer = async (req, res) => {
         pincode: personalData.pincode,
         bio: personalData.bio,
         socialMediaAccounts: personalData.socialHandles,
-        documents: uploadedDocuments
+        documents: uploadedDocuments, // Store documents with ObjectId
       };
 
       await existingUser.save();
@@ -78,17 +90,14 @@ exports.registerInfluencer = async (req, res) => {
         existingUser
       );
     } catch (saveError) {
-      // If save fails, cleanup uploaded documents
-      if (uploadedDocuments.length > 0) {
-        for (let doc of uploadedDocuments) {
-          try {
-            await deleteFromS3(doc.publicId);
-          } catch (deleteError) {
-            console.error("Cleanup error:", deleteError);
-          }
+      // Cleanup uploaded documents if saving fails
+      for (const doc of uploadedDocuments) {
+        try {
+          await deleteFromS3(doc.publicId);
+        } catch (deleteError) {
+          console.error("Cleanup error:", deleteError);
         }
       }
-
       throw saveError;
     }
   } catch (error) {
@@ -150,7 +159,7 @@ exports.updateInfluencer = async (req, res) => {
           _id: new mongoose.Types.ObjectId(),
           url: uploadResponse.url,
           publicId: uploadResponse.filename,
-          documentType: req.body.documentType || "Other",
+          type: req.body.documentType || "Other",
         });
       }
     }
@@ -226,7 +235,7 @@ exports.updateInfluencer = async (req, res) => {
             _id: doc._id || new mongoose.Types.ObjectId(),
             url: doc.url,
             publicId: doc.publicId,
-            documentType: doc.documentType || "Other",
+            type: doc.documentType || "Other",
           })
         )
       : [];
@@ -313,5 +322,38 @@ exports.deleteInfluencerDoc = async (req, res) => {
   } catch (error) {
     console.error("Delete Influencer Document Error:", error);
     sendResponse(res, 500, "Error deleting influencer document", error.message);
+  }
+};
+
+exports.applyForBadge = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    // Find and update the user's badge status
+    const updatedUser = await CustomerModel.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          "isInfluencer.badgeStatus.applied": true,
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      message: "Badge application submitted successfully",
+      badgeStatus: updatedUser.isInfluencer.badgeStatus,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error", error });
   }
 };

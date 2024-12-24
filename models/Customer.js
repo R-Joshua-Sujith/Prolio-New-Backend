@@ -36,6 +36,11 @@ const customerSchema = new Schema(
       applied: { type: Boolean, default: false },
       verified: { type: Boolean, default: false },
       rejected: { type: Boolean, default: false },
+      badgeStatus: {
+        applied: { type: Boolean, default: false },
+        rejected: { type: Boolean, default: false },
+        verified: { type: Boolean, default: false },
+      },
     },
     companyDetails: {
       companyInfo: {
@@ -67,6 +72,17 @@ const customerSchema = new Schema(
       ],
     },
     influencerDetails: { type: mongoose.Schema.Types.Mixed },
+    influencerCompanies: [
+      {
+        companyId: { type: Schema.Types.ObjectId, ref: "Customer" },
+        productIds: [
+          {
+            type: Schema.Types.ObjectId,
+            ref: "Product",
+          },
+        ],
+      },
+    ],
     wishList: [
       {
         type: Schema.Types.ObjectId,
