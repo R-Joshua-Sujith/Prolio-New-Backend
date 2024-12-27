@@ -103,89 +103,334 @@ exports.getCompanyPromotionRequests = async (req, res) => {
       return sendResponse(res, 400, "User not authenticated.");
     }
 
-    // Step 1: Find the company's products
+    // Extract query parameters
+    const {
+      page = 1,
+      pageSize = 10,
+      search = "",
+      status = "pending",
+    } = req.query;
+
+    // Convert page and pageSize to numbers
+    const pageNum = parseInt(page);
+    const limit = parseInt(pageSize);
+    const skip = (pageNum - 1) * limit;
+
+    // Find the company's products
     const products = await ProductModel.find({ ownerId: companyId }).select(
       "_id productRequests"
     );
+
     if (!products.length) {
       return sendResponse(res, 404, "No products found for this company.");
     }
 
-    // Initialize global status counts
-    let globalStatusCounts = {
+    // Get all product IDs
+    const productIds = products.map((product) => product._id);
+
+    // Build the search query
+    const searchQuery = search
+      ? {
+          $or: [
+            { "influencerId.name": { $regex: search, $options: "i" } },
+            { "influencerId.email": { $regex: search, $options: "i" } },
+          ],
+        }
+      : {};
+
+    // Aggregate to get filtered and paginated results
+    const aggregationPipeline = [
+      // Match products owned by the company
+      { $match: { _id: { $in: productIds } } },
+
+      // Unwind the productRequests array
+      { $unwind: "$productRequests" },
+
+      // Lookup to get influencer details
+      {
+        $lookup: {
+          from: "customers",
+          localField: "productRequests.influencerId",
+          foreignField: "_id",
+          as: "influencerDetails",
+        },
+      },
+
+      // Unwind the looked up influencer
+      { $unwind: "$influencerDetails" },
+
+      // Match status and search criteria
+      {
+        $match: {
+          "productRequests.status": status,
+          ...searchQuery,
+        },
+      },
+
+      // Project the required fields
+      {
+        $project: {
+          productId: "$_id",
+          influencerId: "$influencerDetails",
+          status: "$productRequests.status",
+          requestedDate: "$productRequests.requestedDate",
+          rejectedReason: "$productRequests.rejectedReason",
+        },
+      },
+    ];
+
+    // Execute aggregation for total count
+    const totalItems = await ProductModel.aggregate([
+      ...aggregationPipeline,
+      { $count: "total" },
+    ]);
+
+    // Add pagination to the pipeline
+    const paginatedPipeline = [
+      ...aggregationPipeline,
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    // Execute the paginated aggregation
+    const requests = await ProductModel.aggregate(paginatedPipeline);
+
+    // Calculate status counts
+    const statusCounts = {
       pending: 0,
       accepted: 0,
       rejected: 0,
     };
 
-    // Step 2: Extract promotion requests from each product and populate influencer details
-    const productRequestsPromises = products.map(async (product) => {
-      const productRequests = await ProductModel.findById(product._id).populate(
-        {
-          path: "productRequests.influencerId",
-          model: "Customer",
-        }
-      );
-
-      // Calculate the counts of "pending", "accepted", and "rejected" statuses for this product
-      const statusCounts = productRequests.productRequests.reduce(
-        (acc, request) => {
-          if (request.status === "pending") acc.pending++;
-          if (request.status === "accepted") acc.accepted++;
-          if (request.status === "rejected") acc.rejected++;
-
-          // Update global status counts
-          globalStatusCounts.pending += request.status === "pending" ? 1 : 0;
-          globalStatusCounts.accepted += request.status === "accepted" ? 1 : 0;
-          globalStatusCounts.rejected += request.status === "rejected" ? 1 : 0;
-
-          return acc;
-        },
-        { pending: 0, accepted: 0, rejected: 0 }
-      );
-
-      // Return the populated product requests along with status counts
-      return {
-        productId: product._id,
-        influencerRequests: productRequests.productRequests.map((request) => ({
-          influencerId: request.influencerId, // Full influencer document
-          status: request.status,
-          requestedDate: request.requestedDate,
-          rejectedReason: request.rejectedReason,
-          influencerName: request.influencerId.name,
-        })),
-        statusCounts, // Adding the counts for this product
-      };
+    requests.forEach((request) => {
+      statusCounts[request.status]++;
     });
 
-    // Use Promise.all to fetch all requests concurrently
-    const productRequestsArrays = await Promise.all(productRequestsPromises);
-
-    // Flatten the array to get all promotion requests in one array
-    const promotionRequests = productRequestsArrays.flat();
-
-    // Step 3: Check if there are any promotion requests
-    if (!promotionRequests.length) {
-      return sendResponse(
-        res,
-        404,
-        "No promotion requests found for the company's products."
-      );
-    }
-
-    // Step 4: Return the promotion requests with full influencer details, status counts for each product,
-    // and global status counts
     return sendResponse(
       res,
       200,
       "Promotion requests retrieved successfully.",
       {
-        promotionRequests,
-        globalStatusCounts, // Include the global status counts
+        promotionRequests: requests,
+        pagination: {
+          currentPage: pageNum,
+          totalPages: Math.ceil((totalItems[0]?.total || 0) / limit),
+          totalItems: totalItems[0]?.total || 0,
+          pageSize: limit,
+        },
+        statusCounts,
       }
     );
   } catch (error) {
     console.error(error);
     return sendResponse(res, 500, "Server error.");
+  }
+};
+
+// Function to handle accepting or rejecting influencer requests
+// exports.toggleRequestStatus = async (req, res) => {
+//   const { productId, influencerId } = req.params;
+//   const { action, rejectedReason } = req.body;
+
+//   try {
+//     // Find the product by ID
+//     const product = await ProductModel.findById(productId);
+//     if (!product) {
+//       return res.status(404).json({ message: "Product not found" });
+//     }
+//     const requestIndex = product.productRequests.findIndex(
+//       (req) => req.influencerId.toString() === influencerId
+//     );
+//     if (requestIndex === -1) {
+//       return res.status(404).json({ message: "Request not found" });
+//     }
+
+//     // Get the influencer's request
+//     const request = product.productRequests[requestIndex];
+
+//     if (action === "accepted") {
+//       // If the request is accepted, check if it's already accepted
+//       if (request.status === "accepted") {
+//         // If it's already accepted, reject the request and remove the influencer from the company
+//         product.productRequests[requestIndex].status = "rejected";
+//         product.productRequests[requestIndex].rejectedReason = rejectedReason;
+
+//         // Remove influencer from companyInfluencers in Customer model
+//         const company = await Customer.findOne({
+//           _id: product.ownerId,
+//           "companyInfluencers.influencerId": influencerId,
+//         });
+
+//         if (company) {
+//           const influencerIndex = company.companyInfluencers.findIndex(
+//             (inf) => inf.influencerId.toString() === influencerId
+//           );
+
+//           if (influencerIndex !== -1) {
+//             company.companyInfluencers.splice(influencerIndex, 1); // Remove the influencer
+//             await company.save();
+//           }
+//         }
+
+//         await product.save();
+
+//         return res.status(200).json({
+//           message: "Request rejected and influencer removed from company.",
+//         });
+//       }
+
+//       // If the request was pending, accept it
+//       product.productRequests[requestIndex].status = "accepted";
+//       product.productRequests[requestIndex].assignedDate = new Date();
+
+//       // Add influencer to companyInfluencers array in Customer model
+//       const company = await Customer.findById(product.ownerId);
+//       if (!company) {
+//         return res.status(404).json({ message: "Company not found" });
+//       }
+
+//       // Check if the influencer is already in companyInfluencers
+//       const influencerExists = company.companyInfluencers.some(
+//         (inf) => inf.influencerId.toString() === influencerId
+//       );
+//       if (!influencerExists) {
+//         // If influencer doesn't already exist, add to the companyInfluencers array
+//         company.companyInfluencers.push({
+//           influencerId: influencerId,
+//           status: "accepted",
+//           assignedDate: new Date(),
+//         });
+
+//         await company.save();
+//       }
+
+//       await product.save();
+
+//       return res
+//         .status(200)
+//         .json({ message: "Request accepted, influencer added to company" });
+//     }
+
+//     if (action === "rejected") {
+//       // Reject the request and store the rejection reason
+//       product.productRequests[requestIndex].status = "rejected";
+//       product.productRequests[requestIndex].rejectedReason = rejectedReason;
+
+//       // Remove influencer from companyInfluencers if exists
+//       const company = await Customer.findOne({
+//         _id: product.ownerId,
+//         "companyInfluencers.influencerId": influencerId,
+//       });
+
+//       if (company) {
+//         const influencerIndex = company.companyInfluencers.findIndex(
+//           (inf) => inf.influencerId.toString() === influencerId
+//         );
+
+//         if (influencerIndex !== -1) {
+//           company.companyInfluencers.splice(influencerIndex, 1); // Remove the influencer
+//           await company.save();
+//         }
+//       }
+
+//       await product.save();
+
+//       return res.status(200).json({
+//         message: "Request rejected and influencer removed from company.",
+//       });
+//     }
+
+//     return res.status(400).json({ message: "Invalid action" });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+exports.toggleRequestStatus = async (req, res) => {
+  const { productId, influencerId } = req.params;
+  const { action, rejectedReason } = req.body;
+
+  try {
+    // Find the product by ID
+    const product = await ProductModel.findById(productId);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    const requestIndex = product.productRequests.findIndex(
+      (req) => req.influencerId.toString() === influencerId
+    );
+    if (requestIndex === -1)
+      return res.status(404).json({ message: "Request not found" });
+
+    const request = product.productRequests[requestIndex];
+
+    const company = await Customer.findById(product.ownerId);
+    if (!company) return res.status(404).json({ message: "Company not found" });
+
+    // Reusable logic to remove influencer from companyInfluencers
+    const removeInfluencerFromCompany = async () => {
+      const companyUpdate = await Customer.findOne({
+        _id: product.ownerId,
+        "companyInfluencers.influencerId": influencerId,
+      });
+      if (companyUpdate) {
+        const influencerIndex = companyUpdate.companyInfluencers.findIndex(
+          (inf) => inf.influencerId.toString() === influencerId
+        );
+        if (influencerIndex !== -1) {
+          companyUpdate.companyInfluencers.splice(influencerIndex, 1); // Remove the influencer
+          await companyUpdate.save();
+        }
+      }
+    };
+
+    // Process action
+    if (action === "accepted") {
+      // If the request is already accepted, reject it and remove influencer
+      request.status = request.status === "accepted" ? "rejected" : "accepted";
+      request.rejectedReason =
+        request.status === "rejected" ? rejectedReason : undefined;
+      request.status === "rejected" && (await removeInfluencerFromCompany());
+      request.status === "accepted" && (request.assignedDate = new Date());
+
+      // Add influencer to companyInfluencers only if accepting the request
+      if (request.status === "accepted") {
+        const influencerExists = company.companyInfluencers.some(
+          (inf) => inf.influencerId.toString() === influencerId
+        );
+        if (!influencerExists) {
+          company.companyInfluencers.push({
+            influencerId: influencerId,
+            status: "accepted",
+            assignedDate: new Date(),
+          });
+          await company.save();
+        }
+      }
+
+      await product.save();
+      return res.status(200).json({
+        message:
+          request.status === "accepted"
+            ? "Request accepted, influencer added to company"
+            : "Request rejected and influencer removed from company.",
+      });
+    }
+
+    if (action === "rejected") {
+      request.status = "rejected";
+      request.rejectedReason = rejectedReason;
+      await removeInfluencerFromCompany();
+      await product.save();
+
+      return res.status(200).json({
+        message: "Request rejected and influencer removed from company.",
+      });
+    }
+
+    return res.status(400).json({ message: "Invalid action" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error" });
   }
 };

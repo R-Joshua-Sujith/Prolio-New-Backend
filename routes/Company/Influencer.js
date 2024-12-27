@@ -15,4 +15,9 @@ router.get(
   InfluencerController.getCompanyPromotionRequests
 );
 
+router.patch(
+  "/:productId/request/:influencerId",
+  InfluencerController.toggleRequestStatus
+);
+
 module.exports = router;
