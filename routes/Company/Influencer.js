@@ -20,4 +20,7 @@ router.patch(
   InfluencerController.toggleRequestStatus
 );
 
+
+router.get("/my-influencers", companyVerify, InfluencerController.getMyInfluencers);
+
 module.exports = router;

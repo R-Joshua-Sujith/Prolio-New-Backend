@@ -434,3 +434,136 @@ exports.toggleRequestStatus = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+// Function to fetch influencers
+exports.getMyInfluencers = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const userId = req.user?.id;
+    const skip = (page - 1) * limit;
+
+    if (!userId) {
+      return sendResponse(res, 400, false, "User ID is required");
+    }
+
+    const searchCondition = {
+      $or: [
+        { email: { $regex: search, $options: "i" } },
+        { name: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ],
+    };
+
+    const influencers = await Customer.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(userId),
+        },
+      },
+      {
+        $unwind: "$invitedInfluencers",
+      },
+      {
+        $lookup: {
+          from: "customers",
+          localField: "invitedInfluencers.influencerId",
+          foreignField: "_id",
+          as: "influencerData",
+        },
+      },
+      {
+        $unwind: "$influencerData",
+      },
+      {
+        $match: {
+          "influencerData.isInfluencer.applied": true,
+          $or: [
+            { "influencerData.email": { $regex: search, $options: "i" } },
+            { "influencerData.name": { $regex: search, $options: "i" } },
+            { "influencerData.phone": { $regex: search, $options: "i" } },
+          ],
+        },
+      },
+      {
+        $project: {
+          _id: "$influencerData._id",
+          email: "$influencerData.email",
+          name: "$influencerData.name",
+          phone: "$influencerData.phone",
+          profile: "$influencerData.profile",
+          isInfluencer: "$influencerData.isInfluencer",
+          influencerDetails: "$influencerData.influencerDetails",
+          status: "$invitedInfluencers.status",
+          invitationDate: "$invitedInfluencers.invitationDate",
+        },
+      },
+      {
+        $sort: { invitationDate: -1 },
+      },
+      {
+        $skip: parseInt(skip),
+      },
+      {
+        $limit: parseInt(limit),
+      },
+    ]);
+
+    const totalCount = await Customer.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(userId),
+        },
+      },
+      {
+        $unwind: "$invitedInfluencers",
+      },
+      {
+        $lookup: {
+          from: "customers",
+          localField: "invitedInfluencers.influencerId",
+          foreignField: "_id",
+          as: "influencerData",
+        },
+      },
+      {
+        $unwind: "$influencerData",
+      },
+      {
+        $match: {
+          "influencerData.isInfluencer.applied": true,
+          $or: [
+            { "influencerData.email": { $regex: search, $options: "i" } },
+            { "influencerData.name": { $regex: search, $options: "i" } },
+            { "influencerData.phone": { $regex: search, $options: "i" } },
+          ],
+        },
+      },
+      {
+        $count: "total",
+      },
+    ]);
+
+    const total = totalCount[0]?.total || 0;
+
+    const data = {
+      influencers: influencers || [],
+      pagination: {
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: parseInt(page),
+        perPage: parseInt(limit),
+      },
+    };
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Influencers fetched successfully",
+      data
+    );
+  } catch (error) {
+    console.error("Error fetching my influencers:", error);
+    return sendResponse(res, 500, false, "Internal Server Error");
+  }
+};

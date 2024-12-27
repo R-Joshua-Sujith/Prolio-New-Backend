@@ -134,12 +134,19 @@ const removeWishlistItem = async (req, res) => {
     const { productId } = req.params;
     const customerId = req.user.id;
 
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: "Product ID is required",
+      });
+    }
+
     // Find and update the wishlist in one operation
     const wishlist = await Wishlist.findOneAndUpdate(
       { customerId },
       { $pull: { products: { productId } } },
       {
-        new: true, // Return the modified document
+        new: true,
         runValidators: true,
       }
     ).populate("products.productId");
@@ -152,10 +159,15 @@ const removeWishlistItem = async (req, res) => {
       });
     }
 
-    // Check if product was actually removed
-    const wasProductRemoved = wishlist.products.every(
-      (p) => p.productId.toString() !== productId
-    );
+    // Check if product was actually removed with null check
+    const wasProductRemoved = wishlist.products.every((p) => {
+      if (!p || !p.productId) return true; // Skip null/undefined products
+      return (
+        p.productId &&
+        typeof p.productId.toString === "function" &&
+        p.productId.toString() !== productId
+      );
+    });
 
     if (!wasProductRemoved) {
       return res.status(404).json({
@@ -164,10 +176,16 @@ const removeWishlistItem = async (req, res) => {
       });
     }
 
+    // Filter out any null products before sending response
+    const cleanWishlist = {
+      ...wishlist.toObject(),
+      products: wishlist.products.filter((p) => p && p.productId),
+    };
+
     res.status(200).json({
       success: true,
       message: "Product removed from wishlist successfully",
-      data: wishlist,
+      data: cleanWishlist,
     });
   } catch (error) {
     console.error("Error removing wishlist item:", error);
@@ -248,30 +266,28 @@ const checkWishlistStatus = async (req, res) => {
   }
 };
 
-
 const getWishlist = async (req, res) => {
   try {
     const customerId = req.user.id;
 
     // Find wishlist and populate product details
-    const wishlist = await Wishlist.findOne({ customerId })
-      .populate({
-        path: 'products.productId',
-        select: 'name price images basicDetails' // Select only necessary fields
-      });
+    const wishlist = await Wishlist.findOne({ customerId }).populate({
+      path: "products.productId",
+      select: "name price images basicDetails", // Select only necessary fields
+    });
 
     if (!wishlist) {
       return res.status(404).json({
         success: false,
         message: "No wishlist found",
-        data: []
+        data: [],
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Wishlist retrieved successfully",
-      data: wishlist.products
+      data: wishlist.products,
     });
   } catch (error) {
     console.error("Error retrieving wishlist:", error);
@@ -290,5 +306,5 @@ module.exports = {
   updateWishlistStatus,
   clearWishlist,
   checkWishlistStatus,
-  getWishlist
+  getWishlist,
 };
