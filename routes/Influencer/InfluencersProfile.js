@@ -40,4 +40,15 @@ router.delete(
   influencerController.deleteInfluencerDoc
 );
 
+router.post(
+  "/send-promotionRequest",
+  influencerVerify,
+  influencerController.sendPromotionRequest
+);
+router.get(
+  "/promotion-status/:productId",
+  influencerVerify,
+  influencerController.getPromotionStatus
+);
+
 module.exports = router;
