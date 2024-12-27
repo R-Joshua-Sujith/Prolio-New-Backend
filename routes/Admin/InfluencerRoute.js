@@ -7,6 +7,7 @@ const { looseVerify } = require("../../controller/Customer/Middleware/auth");
 
 // Route to get all influencers
 router.get("/all-influencers", InfluencerController.getInfluencers);
+
 router.get(
   "/badges-applications",
   adminVerify,

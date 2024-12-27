@@ -15,4 +15,7 @@ router.get(
   InfluencerController.getCompanyPromotionRequests
 );
 
+
+router.get("/my-influencers", companyVerify, InfluencerController.getMyInfluencers);
+
 module.exports = router;
