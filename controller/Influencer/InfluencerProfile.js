@@ -1,7 +1,9 @@
 const CustomerModel = require("../../models/Customer");
 const { sendResponse } = require("../../utils/responseHandler");
 const { uploadToS3, deleteFromS3 } = require("../../utils/s3FileUploader");
+const ProductModel = require("../../models/Product");
 const mongoose = require("mongoose");
+const NotificationService = require("../../utils/notificationService");
 
 // Controller function to register an influencer (with file upload handling)exports.
 exports.registerInfluencer = async (req, res) => {
@@ -333,12 +335,13 @@ exports.applyForBadge = async (req, res) => {
       return res.status(400).json({ message: "User ID is required" });
     }
 
-    // Find and update the user's badge status
+    // Find and update the user's badge status, resetting 'rejected' to false when applying
     const updatedUser = await CustomerModel.findByIdAndUpdate(
       userId,
       {
         $set: {
           "isInfluencer.badgeStatus.applied": true,
+          "isInfluencer.badgeStatus.rejected": false, // Reset rejected status to false
         },
       },
       { new: true, runValidators: true }
@@ -355,5 +358,98 @@ exports.applyForBadge = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error", error });
+  }
+};
+
+exports.sendPromotionRequest = async (req, res) => {
+  try {
+    const influencerId = req.user?.id;
+    const { productId } = req.body;
+
+    // Step 1: Check if the product exists
+    const product = await ProductModel.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    // Step 2: Find the influencer
+    const influencer = await CustomerModel.findById(influencerId);
+    if (!influencer) {
+      return res.status(404).json({ message: "Influencer not found." });
+    }
+    const existingRequest = product.productRequests.some(
+      (request) =>
+        request.influencerId.toString() === influencerId &&
+        request.status === "pending"
+    );
+
+    if (existingRequest) {
+      return res
+        .status(400)
+        .json({ message: "Request already sent for this product." });
+    }
+
+    product.productRequests.push({
+      influencerId: influencerId,
+      status: "pending",
+      requestedDate: Date.now(),
+    });
+
+    await product.save();
+
+    // Step 5: Send notification to the product owner
+    const productOwnerId = product.ownerId;
+    const notificationMessage = `You have received a new promotion request from ${influencer.name} for your product.`;
+    await NotificationService.createNotification({
+      userId: productOwnerId,
+      message: notificationMessage,
+      type: "promotion_request",
+    });
+
+    res.status(200).json({
+      message: "Promotion request sent to the product owner successfully.",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error occurred." });
+  }
+};
+
+exports.getPromotionStatus = async (req, res) => {
+  try {
+    const influencerId = req.user?.id;
+    const { productId } = req.params;
+
+    // Check if influencerId is available
+    if (!influencerId) {
+      return res.status(400).json({ message: "Influencer not authenticated." });
+    }
+
+    // Step 1: Find the product by ID
+    const product = await ProductModel.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    // Step 2: Check if the influencer has a request for this product
+    const promotionRequest = product.productRequests.find(
+      (request) => request.influencerId.toString() === influencerId
+    );
+
+    // If no promotion request found for this influencer and product
+    if (!promotionRequest) {
+      return res.status(404).json({
+        message: "Promotion request not found for this product and influencer.",
+      });
+    }
+
+    // Step 3: Return the promotion request status
+    return res.status(200).json({
+      message: "Promotion request status retrieved successfully.",
+      status: promotionRequest.status,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error occurred." });
   }
 };

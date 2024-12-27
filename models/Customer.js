@@ -36,10 +36,12 @@ const customerSchema = new Schema(
       applied: { type: Boolean, default: false },
       verified: { type: Boolean, default: false },
       rejected: { type: Boolean, default: false },
+      rejectedReason: { type: String, default: null }, // New field to store rejection reason
       badgeStatus: {
         applied: { type: Boolean, default: false },
         rejected: { type: Boolean, default: false },
         verified: { type: Boolean, default: false },
+        rejectedReason: { type: String, default: null }, // New field to store rejection reason
       },
     },
     companyDetails: {
@@ -72,15 +74,28 @@ const customerSchema = new Schema(
       ],
     },
     influencerDetails: { type: mongoose.Schema.Types.Mixed },
-    influencerCompanies: [
+    // List of influencers the company has invited
+    invitedInfluencers: [
       {
-        companyId: { type: Schema.Types.ObjectId, ref: "Customer" },
-        productIds: [
-          {
-            type: Schema.Types.ObjectId,
-            ref: "Product",
-          },
-        ],
+        influencerId: { type: Schema.Types.ObjectId, ref: "Customer" },
+        status: {
+          type: String,
+          enum: ["pending", "accepted", "rejected"],
+          default: "pending",
+        },
+        invitationDate: { type: Date, default: Date.now },
+      },
+    ],
+    // Add the companyInfluencers field back to store accepted influencers
+    companyInfluencers: [
+      {
+        influencerId: { type: Schema.Types.ObjectId, ref: "Customer" },
+        status: {
+          type: String,
+          enum: ["pending", "accepted", "rejected"],
+          default: "pending",
+        },
+        assignedDate: { type: Date },
       },
     ],
     wishList: [
