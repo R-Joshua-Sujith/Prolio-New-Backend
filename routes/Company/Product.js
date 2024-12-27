@@ -35,6 +35,7 @@ router.get(
   companyProductController.getCompanyProducts
 );
 
+
 router.get(
   "/get-product/:productId",
   companyVerify,
