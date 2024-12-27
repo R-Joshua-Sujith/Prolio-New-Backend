@@ -35,6 +35,9 @@ const getInfluencers = async (req, res) => {
           profile: 1,
           isInfluencer: 1,
           influencerDetails: 1,
+          influencerCompanies: 1,
+          invitedInfluencers: 1,
+          sentRequests: 1,
         },
       },
       {
@@ -136,8 +139,23 @@ const getInfluencersWithBadgeApplications = async (req, res) => {
 const updateInfluencerStatus = async (req, res) => {
   try {
     const { influencerId } = req.params;
-    const { action } = req.body;
+    const { action, rejectedReason } = req.body;
     const adminId = req.user?.id;
+
+    if (!["verified", "rejected"].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid action. Allowed actions are 'verified' or 'rejected'.",
+      });
+    }
+    // Validate rejectedReason for rejected status
+    if (action === "rejected" && !rejectedReason) {
+      return res.status(400).json({
+        success: false,
+        message: "Rejection reason is required when the status is 'rejected'.",
+      });
+    }
 
     const updatedInfluencer = await CustomerModel.findByIdAndUpdate(
       influencerId,
@@ -145,6 +163,8 @@ const updateInfluencerStatus = async (req, res) => {
         $set: {
           "isInfluencer.verified": action === "verified",
           "isInfluencer.rejected": action === "rejected",
+          "isInfluencer.rejectedReason":
+            action === "rejected" ? rejectedReason : null,
         },
       },
       { new: true }
@@ -196,9 +216,10 @@ const updateInfluencerStatus = async (req, res) => {
 const updateInfluencerBadgesStatus = async (req, res) => {
   try {
     const { influencerId } = req.params;
-    const { action } = req.body; // Action should be 'verified', 'rejected', or another status
+    const { action, rejectedReason } = req.body;
     const adminId = req.user?.id;
 
+    // Validate action
     if (!["verified", "rejected"].includes(action)) {
       return res.status(400).json({
         success: false,
@@ -207,15 +228,26 @@ const updateInfluencerBadgesStatus = async (req, res) => {
       });
     }
 
-    // Update the influencer's badge status
+    // Validate rejectedReason for rejected status
+    if (action === "rejected" && !rejectedReason) {
+      return res.status(400).json({
+        success: false,
+        message: "Rejection reason is required when the status is 'rejected'.",
+      });
+    }
+
+    // Prepare update data
+    const updateData = {
+      "isInfluencer.badgeStatus.verified": action === "verified",
+      "isInfluencer.badgeStatus.rejected": action === "rejected",
+      "isInfluencer.badgeStatus.rejectedReason":
+        action === "rejected" ? rejectedReason : null,
+    };
+
+    // Update influencer
     const updatedInfluencer = await CustomerModel.findByIdAndUpdate(
       influencerId,
-      {
-        $set: {
-          "isInfluencer.badgeStatus.verified": action === "verified",
-          "isInfluencer.badgeStatus.rejected": action === "rejected",
-        },
-      },
+      { $set: updateData },
       { new: true }
     );
 
@@ -226,26 +258,21 @@ const updateInfluencerBadgesStatus = async (req, res) => {
       });
     }
 
-    // Create log for the status change
+    // Create log
     await createLogs({
-      userId: adminId, // Admin who performed the action
+      userId: adminId,
       userModel: "Admin",
-      targetId: influencerId, // Influencer affected by the action
+      targetId: influencerId,
       targetModel: "Influencer",
-      action: `Influencer status updated to ${action}`, // Log the action taken
+      action: `Influencer status updated to ${action}`,
     });
 
-    // Create notification message based on the action
-    let message;
-    if (action === "verified") {
-      message =
-        "Congratulations! Your application for influencer badges has been successfully verified by Prolio.. Welcome aboard!";
-    } else if (action === "rejected") {
-      message =
-        "We regret to inform you that your application for influencer badges was not approved by Prolio. Please contact support for details.";
-    }
-
-    // Send notification to the influencer
+    // Create notification message
+    const message =
+      action === "verified"
+        ? "Congrats! Your badge application has been verified by Prolio. Welcome aboard!"
+        : `Your badge application was rejected by Prolio. Please Contact support for details.`;
+    // Send notification
     await NotificationService.createNotification({
       userId: influencerId,
       message,
