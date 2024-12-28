@@ -67,7 +67,7 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
+    console.log(email, password);
     // Validate input
     const { errors, isValid } = validateLoginInput(email, password);
     if (!isValid) {
@@ -324,10 +324,10 @@ exports.checkCompanyStatus = async (req, res) => {
       status: user.isCompany.verified
         ? "Verified"
         : user.isCompany.rejected
-        ? "Rejected"
-        : user.isCompany.applied
-        ? "Pending"
-        : "Not Applied",
+          ? "Rejected"
+          : user.isCompany.applied
+            ? "Pending"
+            : "Not Applied",
     };
 
     res.status(200).json({
