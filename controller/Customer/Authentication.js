@@ -135,12 +135,13 @@ exports.checkVerificationStatus = async (req, res) => {
     }
 
     // Extract the `isCompany` object
-    const { isCompany } = customer;
+    const { isCompany,isInfluencer } = customer;
 
-    // Return the `isCompany` object with statuses
+    // Return the `isCompany` object with statuses  
     return res.status(200).json({
       success: true,
       isCompany,
+      isInfluencer,
     });
   } catch (error) {
     console.error("Error checking verification status:", error);

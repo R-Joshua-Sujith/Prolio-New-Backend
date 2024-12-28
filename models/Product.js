@@ -59,6 +59,20 @@ const productSchema = new Schema(
     ],
     totalViews: { type: Number, default: 0 },
     shareCount: { type: Number, default: 0 },
+    // Add productRequests array in Product model
+    productRequests: [
+      {
+        influencerId: { type: Schema.Types.ObjectId, ref: "Customer" },
+        status: {
+          type: String,
+          enum: ["pending", "accepted", "rejected"],
+          default: "pending",
+        },
+        requestedDate: { type: Date, default: Date.now },
+        assignedDate: { type: Date },
+        rejectedReason: { type: String, default: null },
+      },
+    ],
   },
   {
     timestamps: true,
