@@ -51,4 +51,11 @@ router.get(
   influencerController.getPromotionStatus
 );
 
+// Route definition
+router.get(
+  "/my-companies",
+  influencerVerify,
+  influencerController.getMyCompanies
+);
+
 module.exports = router;
