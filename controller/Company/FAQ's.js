@@ -353,6 +353,48 @@ const editFaqQuestion = async (req, res) => {
   }
 };
 
+const getRejectedFAQs = async (req, res) => {
+  try {
+    const { page = 1, limit = 6, search = "" } = req.query;
+
+    const query = {
+      status: "rejected",
+      ...(search && {
+        $or: [
+          { question: { $regex: search, $options: "i" } },
+          { answer: { $regex: search, $options: "i" } },
+        ],
+      }),
+    };
+
+    const faqs = await FAQ.find(query)
+      .populate("askedBy", "name")
+      .sort({ updatedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const totalItems = await FAQ.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: faqs,
+      pagination: {
+        totalItems,
+        currentPage: parseInt(page),
+        itemsPerPage: parseInt(limit),
+        totalPages: Math.ceil(totalItems / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Get rejected FAQs error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch rejected FAQs",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getPendingQuestions,
   answerQuestion,
@@ -360,4 +402,5 @@ module.exports = {
   getProductFAQs,
   rejectFAQ,
   editFaqQuestion,
+  getRejectedFAQs,
 };

@@ -4,12 +4,14 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const http = require("http");
+const morgan = require("morgan");
+const helmet = require("helmet");
 const { Server } = require("socket.io");
-const { uploadToS3 } = require("./utils/s3FileUploader");
 const { getServerStatusMessage } = require("./utils/serverStatus");
 const customerRoutes = require("./routes/MainRoutes/Customer");
 const companyRoutes = require("./routes/MainRoutes/Company");
 const adminRoutes = require("./routes/MainRoutes/Admin");
+const influencerRoutes = require("./routes/MainRoutes/Influencer");
 const { socketConnection, socketAuthMiddleware } = require("./utils/socket");
 
 dotenv.config();
@@ -17,6 +19,8 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(cookieParser());
+app.use(helmet());
+app.use(morgan("dev"));
 
 // Connect to MongoDB
 mongoose
@@ -43,14 +47,14 @@ app.use((req, res, next) => {
 app.use("/customer", customerRoutes);
 app.use("/company", companyRoutes);
 app.use("/admin", adminRoutes);
+app.use("/influencer", influencerRoutes);
 
 // Root endpoint for server status
 app.get("/", (req, res) => {
   res.send(getServerStatusMessage());
 });
 
-// Use the authentication middleware for socket connection
-// Use the socket connection handler
+// Use the socket connection authentication middleware for socket connection
 io.use(socketAuthMiddleware);
 socketConnection(io);
 

@@ -12,7 +12,7 @@ const upload = multer({ storage });
 // Define fields for file uploads
 const uploadFields = upload.fields([
   { name: "documents", maxCount: 10 },
-  { name: "companyLogo", maxCount: 1 },
+  { name: "companyLogo", maxCount: 5 },
 ]);
 
 // Register company route
@@ -32,4 +32,5 @@ router.get(
 router.get("/company-details/:productId", companyController.getCompanyDetails);
 
 router.post("/update-files", uploadFields, companyController.updateFiles);
+
 module.exports = router;

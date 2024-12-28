@@ -278,11 +278,7 @@ const getAllCompanyProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Build query object with ownerId
-    const query = {
-      ownerId,
-      status: "Active",
-      "block.isBlocked": false,
-    };
+    const query = { ownerId };
 
     // Search functionality
     if (searchTerm) {
@@ -1188,6 +1184,29 @@ const getProductStats = async (req, res) => {
     return sendResponse(res, 500, "Server error");
   }
 };
+
+
+
+const getCompanyProductsIds = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return sendResponse(res, 400, false, "User ID is required");
+    }
+
+    const products = await ProductModel.find({ companyId: userId })
+      .sort({ createdAt: -1 });
+
+    return sendResponse(res, 200, true, "Products fetched successfully", { products });
+  } catch (error) {
+    console.error("Error fetching company products:", error);
+    return sendResponse(res, 500, false, "Internal Server Error");
+  }
+};
+
+
+
 module.exports = {
   test,
   createProduct,

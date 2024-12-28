@@ -67,7 +67,7 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
+    console.log(email, password);
     // Validate input
     const { errors, isValid } = validateLoginInput(email, password);
     if (!isValid) {
@@ -135,12 +135,13 @@ exports.checkVerificationStatus = async (req, res) => {
     }
 
     // Extract the `isCompany` object
-    const { isCompany } = customer;
+    const { isCompany,isInfluencer } = customer;
 
-    // Return the `isCompany` object with statuses
+    // Return the `isCompany` object with statuses  
     return res.status(200).json({
       success: true,
       isCompany,
+      isInfluencer,
     });
   } catch (error) {
     console.error("Error checking verification status:", error);
@@ -323,10 +324,10 @@ exports.checkCompanyStatus = async (req, res) => {
       status: user.isCompany.verified
         ? "Verified"
         : user.isCompany.rejected
-        ? "Rejected"
-        : user.isCompany.applied
-        ? "Pending"
-        : "Not Applied",
+          ? "Rejected"
+          : user.isCompany.applied
+            ? "Pending"
+            : "Not Applied",
     };
 
     res.status(200).json({
