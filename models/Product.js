@@ -73,6 +73,20 @@ const productSchema = new Schema(
         rejectedReason: { type: String, default: null },
       },
     ],
+    productAssign: [
+      {
+        influencerId: { type: Schema.Types.ObjectId, ref: "Customer" },
+        status: {
+          type: String,
+          enum: ["pending", "accepted", "rejected"],
+          default: "accepted",
+        },
+        requestedDate: { type: Date, default: Date.now },
+        assignedDate: { type: Date },
+        rejectedReason: { type: String, default: null },
+      },
+    ],
+
   },
   {
     timestamps: true,

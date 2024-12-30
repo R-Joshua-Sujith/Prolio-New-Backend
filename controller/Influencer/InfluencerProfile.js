@@ -453,3 +453,184 @@ exports.getPromotionStatus = async (req, res) => {
     res.status(500).json({ message: "Server error occurred." });
   }
 };
+
+exports.getMyCompanies = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const influencerId = req.user?.id;
+    const skip = (page - 1) * limit;
+
+    if (!influencerId) {
+      return sendResponse(res, 400, false, "Influencer ID is required");
+    }
+
+    const influencer = await CustomerModel.findById(influencerId);
+    if (!influencer || !influencer.isInfluencer.verified) {
+      return sendResponse(res, 400, false, "User is not a verified influencer");
+    }
+
+    const companies = await CustomerModel.aggregate([
+      {
+        $match: {
+          "companyInfluencers.influencerId": new mongoose.Types.ObjectId(influencerId),
+          "companyInfluencers.status": "accepted",
+          "isCompany.verified": true,
+        },
+      },
+      {
+        $match: {
+          $or: [
+            { "companyDetails.companyInfo.companyName": { $regex: search, $options: "i" } },
+            { email: { $regex: search, $options: "i" } },
+            { name: { $regex: search, $options: "i" } },
+          ],
+        },
+      },
+      {
+        $lookup: {
+          from: "products",
+          let: { companyId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$ownerId", "$$companyId"] },
+                    {
+                      $gt: [
+                        {
+                          $size: {
+                            $ifNull: [
+                              {
+                                $filter: {
+                                  input: { $ifNull: ["$productAssign", []] },
+                                  as: "assign",
+                                  cond: {
+                                    $and: [
+                                      { $eq: ["$$assign.influencerId", new mongoose.Types.ObjectId(influencerId)] },
+                                      { $eq: ["$$assign.status", "accepted"] }
+                                    ]
+                                  }
+                                }
+                              },
+                              []
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          as: "assignedProducts",
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          companyName: "$companyDetails.companyInfo.companyName",
+          ownerName: "$companyDetails.companyInfo.ownerName",
+          businessType: "$companyDetails.companyInfo.businessType",
+          companyAbout: "$companyDetails.companyInfo.companyAbout",
+          totalEmployees: "$companyDetails.companyInfo.totalEmployees",
+          companyLogo: "$companyDetails.companyLogo",
+          contactInfo: "$companyDetails.contactInfo",
+          assignedProducts: {
+            $map: {
+              input: { $ifNull: ["$assignedProducts", []] },
+              as: "product",
+              in: {
+                _id: "$$product._id",
+                name: "$$product.basicDetails.name",
+                description: "$$product.basicDetails.description",
+                price: "$$product.basicDetails.price",
+                slug: "$$product.basicDetails.slug",  // Added slug field here
+                images: {
+                  $map: {
+                    input: { $ifNull: ["$$product.images", []] },
+                    as: "image",
+                    in: {
+                      url: "$$image.url",
+                      publicId: "$$image.publicId"
+                    }
+                  }
+                },
+                status: "$$product.status",
+                colors: {
+                  $map: {
+                    input: { $ifNull: ["$$product.colors", []] },
+                    as: "color",
+                    in: {
+                      name: "$$color.name",
+                      price: "$$color.price",
+                      images: {
+                        $map: {
+                          input: { $ifNull: ["$$color.images", []] },
+                          as: "colorImage",
+                          in: {
+                            url: "$$colorImage.url",
+                            publicId: "$$colorImage.publicId"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                assignmentDetails: {
+                  $ifNull: [
+                    {
+                      $filter: {
+                        input: { $ifNull: ["$$product.productAssign", []] },
+                        as: "assign",
+                        cond: { 
+                          $eq: ["$$assign.influencerId", new mongoose.Types.ObjectId(influencerId)]
+                        }
+                      }
+                    },
+                    []
+                  ]
+                }
+              },
+            },
+          },
+          totalAssignedProducts: { 
+            $size: { $ifNull: ["$assignedProducts", []] }
+          },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+    ]);
+
+    const totalCount = await CustomerModel.countDocuments({
+      "companyInfluencers.influencerId": new mongoose.Types.ObjectId(influencerId),
+      "companyInfluencers.status": "accepted",
+      "isCompany.verified": true,
+    });
+
+    const data = {
+      companies: companies || [],
+      pagination: {
+        totalItems: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: parseInt(page),
+        perPage: parseInt(limit),
+      },
+    };
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Companies and assigned products fetched successfully",
+      data
+    );
+  } catch (error) {
+    console.error("Error fetching influencer's companies:", error);
+    return sendResponse(res, 500, false, "Internal Server Error");
+  }
+};
