@@ -446,14 +446,6 @@ exports.getMyInfluencers = async (req, res) => {
       return sendResponse(res, 400, false, "User ID is required");
     }
 
-    const searchCondition = {
-      $or: [
-        { email: { $regex: search, $options: "i" } },
-        { name: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-      ],
-    };
-
     const influencers = await Customer.aggregate([
       {
         $match: {
@@ -461,12 +453,12 @@ exports.getMyInfluencers = async (req, res) => {
         },
       },
       {
-        $unwind: "$invitedInfluencers",
+        $unwind: "$companyInfluencers",
       },
       {
         $lookup: {
           from: "customers",
-          localField: "invitedInfluencers.influencerId",
+          localField: "companyInfluencers.influencerId",
           foreignField: "_id",
           as: "influencerData",
         },
@@ -493,12 +485,12 @@ exports.getMyInfluencers = async (req, res) => {
           profile: "$influencerData.profile",
           isInfluencer: "$influencerData.isInfluencer",
           influencerDetails: "$influencerData.influencerDetails",
-          status: "$invitedInfluencers.status",
-          invitationDate: "$invitedInfluencers.invitationDate",
+          status: "$companyInfluencers.status",
+          assignedDate: "$companyInfluencers.assignedDate",
         },
       },
       {
-        $sort: { invitationDate: -1 },
+        $sort: { assignedDate: -1 },
       },
       {
         $skip: parseInt(skip),
@@ -515,12 +507,12 @@ exports.getMyInfluencers = async (req, res) => {
         },
       },
       {
-        $unwind: "$invitedInfluencers",
+        $unwind: "$companyInfluencers",
       },
       {
         $lookup: {
           from: "customers",
-          localField: "invitedInfluencers.influencerId",
+          localField: "companyInfluencers.influencerId",
           foreignField: "_id",
           as: "influencerData",
         },
@@ -559,11 +551,11 @@ exports.getMyInfluencers = async (req, res) => {
       res,
       200,
       true,
-      "Influencers fetched successfully",
+      "Company influencers fetched successfully",
       data
     );
   } catch (error) {
-    console.error("Error fetching my influencers:", error);
+    console.error("Error fetching company influencers:", error);
     return sendResponse(res, 500, false, "Internal Server Error");
   }
 };

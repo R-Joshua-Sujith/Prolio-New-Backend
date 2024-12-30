@@ -35,7 +35,6 @@ router.get(
   companyProductController.getCompanyProducts
 );
 
-
 router.get(
   "/get-product/:productId",
   companyVerify,
@@ -117,6 +116,13 @@ router.get(
   // companyVerify,
   companyProductController.getProductStats
 );
+
+router.post(
+  "/assign-products",
+  companyVerify,
+  companyProductController.assignProducts
+);
+
 module.exports = router;
 
 //test

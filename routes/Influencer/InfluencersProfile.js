@@ -51,6 +51,13 @@ router.get(
   influencerController.getPromotionStatus
 );
 
+// Route definition
+router.get(
+  "/my-companies",
+  influencerVerify,
+  influencerController.getMyCompanies
+);
+
 router.put(
   "/:companyId/accept-reject",
   influencerVerify,
