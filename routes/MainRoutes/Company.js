@@ -10,7 +10,7 @@ const companyLogsRoutes = require("../Company/Logs");
 const companyFAQRoutes = require("../Company/FAQ's.js");
 const companyDepartmentRoutes = require("../Company/Department.js");
 const companyUserRoutes = require("../Company/companyUser.js");
-const companyUserAuthRoutes = require("../Company/companyUserAuth")
+const companyUserAuthRoutes = require("../Company/companyUserAuth");
 const companyinfluencersRoutes = require("../Company/Influencer");
 
 router.use("/enquiry", companyEnquiryRoutes);
