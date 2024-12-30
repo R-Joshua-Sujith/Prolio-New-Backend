@@ -55,7 +55,7 @@ exports.inviteInfluencer = async (req, res) => {
         const companyName = company.companyDetails.companyInfo.companyName;
 
         // Notification Message for removing invitation
-        notificationMessage = `${companyName} has canceled your invitation.`;
+        notificationMessage = `${companyName} has declined your invitation.`;
         notificationType = "invitation_cancelled";
         await NotificationService.createNotification({
           userId: influencerId,
@@ -81,7 +81,7 @@ exports.inviteInfluencer = async (req, res) => {
 
     // Notification Message for sending invitation
     const companyName = company.companyDetails.companyInfo.companyName;
-    notificationMessage = `🎉 You're invited! ${companyName} wants to collaborate with you.`;
+    notificationMessage = `You're invited! ${companyName} wants to collaborate with you.`;
     notificationType = "invitation_sent";
     await NotificationService.createNotification({
       userId: influencerId,
@@ -565,5 +565,137 @@ exports.getMyInfluencers = async (req, res) => {
   } catch (error) {
     console.error("Error fetching my influencers:", error);
     return sendResponse(res, 500, false, "Internal Server Error");
+  }
+};
+
+exports.getAllInfluencers = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const skip = (page - 1) * limit;
+    const searchCondition = {
+      $or: [
+        { email: { $regex: search, $options: "i" } },
+        { name: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ],
+    };
+
+    // Aggregate pipeline for fetching influencers
+    const influencers = await Customer.aggregate([
+      {
+        $match: {
+          "isInfluencer.applied": true,
+          "isInfluencer.verified": true, // Only verified influencers
+          ...searchCondition,
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          email: 1,
+          name: 1,
+          phone: 1,
+          profile: 1,
+          isInfluencer: 1,
+          influencerDetails: 1,
+          influencerCompanies: 1,
+          invitedInfluencers: 1,
+          sentRequests: 1,
+        },
+      },
+      {
+        $skip: skip,
+      },
+      {
+        $limit: parseInt(limit),
+      },
+    ]);
+
+    // Get the total count of influencers for pagination
+    const totalInfluencers = await Customer.countDocuments({
+      "isInfluencer.applied": true,
+      "isInfluencer.verified": true, // Only verified influencers
+      ...searchCondition,
+    });
+    res.status(200).json({
+      success: true,
+      influencers,
+      pagination: {
+        totalItems: totalInfluencers,
+        totalPages: Math.ceil(totalInfluencers / limit),
+        currentPage: parseInt(page),
+        perPage: parseInt(limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching influencers:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.getCompanyInfluencersAndInvites = async (req, res) => {
+  try {
+    // Extract companyId from req.user
+    const companyId = req.user?.id;
+
+    // Validate companyId
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Company ID is required.",
+      });
+    }
+
+    // Find company with populated influencers
+    const company = await Customer.findById(companyId)
+      .populate({
+        path: "companyInfluencers",
+        select: "influencerId status",
+      })
+      .populate({
+        path: "invitedInfluencers",
+        select: "influencerId status",
+      });
+
+    // Check if the company exists
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: "Company not found.",
+      });
+    }
+
+    // Format the response to include populated details
+    const companyInfluencers = company.companyInfluencers.map((item) => ({
+      ...item.toObject(),
+      influencerDetails: item.influencerId,
+    }));
+
+    const invitedInfluencers = company.invitedInfluencers.map((item) => ({
+      ...item.toObject(),
+      influencerDetails: item.influencerId,
+    }));
+
+    // Send response
+    res.status(200).json({
+      success: true,
+      message:
+        "Company influencers and invited influencers fetched successfully.",
+      data: {
+        companyId: company._id,
+        companyName: company.companyDetails?.companyInfo?.companyName || "",
+        companyInfluencers,
+        invitedInfluencers,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching company influencers and invites:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
   }
 };

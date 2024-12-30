@@ -51,4 +51,16 @@ router.get(
   influencerController.getPromotionStatus
 );
 
+router.put(
+  "/:companyId/accept-reject",
+  influencerVerify,
+  influencerController.acceptRejectInvitation
+);
+
+router.get(
+  "/pending-invitations",
+  influencerVerify,
+  influencerController.getAllInvitations
+);
+
 module.exports = router;

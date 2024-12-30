@@ -453,3 +453,219 @@ exports.getPromotionStatus = async (req, res) => {
     res.status(500).json({ message: "Server error occurred." });
   }
 };
+
+// exports.acceptRejectInvitation = async (req, res) => {
+//   try {
+//     const influencerId = req.user?.id; // Logged-in influencer's ID
+//     const { companyId } = req.params;
+//     const { status } = req.body; // 'accepted' or 'rejected'
+
+//     // Log the incoming data for debugging
+//     console.log("Received request to accept/reject invitation:", {
+//       influencerId,
+//       companyId,
+//       status,
+//     });
+
+//     // Find the company that sent the invitation
+//     const company = await CustomerModel.findById(companyId);
+//     if (!company) {
+//       console.log(`Company with ID ${companyId} not found.`);
+//       return res.status(404).json({
+//         success: false,
+//         message: "Company not found",
+//       });
+//     }
+
+//     console.log(`Found company: ${company.name}`);
+
+//     // Find the invitation in the company's invitedInfluencers array
+//     const invitationIndex = company.invitedInfluencers.findIndex(
+//       (inv) => inv.influencerId.toString() === influencerId.toString()
+//     );
+
+//     if (invitationIndex === -1) {
+//       console.log(
+//         `Invitation not found for influencer ${influencerId} in company ${companyId}`
+//       );
+//       return res.status(404).json({
+//         success: false,
+//         message: "Invitation not found",
+//       });
+//     }
+
+//     // Log the invitation before removing it
+//     const invitation = company.invitedInfluencers[invitationIndex];
+//     console.log(`Invitation found:`, invitation);
+
+//     // Remove the invitation from invitedInfluencers array
+//     company.invitedInfluencers.splice(invitationIndex, 1);
+//     console.log(`Removed invitation for influencer ${influencerId}`);
+
+//     if (status === "accepted") {
+//       // Add to companyInfluencers if accepted
+//       company.companyInfluencers.push({
+//         influencerId: influencerId,
+//         status: "accepted",
+//         assignedDate: new Date(),
+//       });
+//       console.log(
+//         `Added influencer ${influencerId} to companyInfluencers with status 'accepted'`
+//       );
+//     } else {
+//       console.log(`Invitation rejected for influencer ${influencerId}`);
+//     }
+
+//     // Save the changes
+//     await company.save();
+//     console.log(`Company data saved successfully`);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `Invitation ${status} successfully`,
+//     });
+//   } catch (error) {
+//     console.error("Error handling invitation:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+exports.acceptRejectInvitation = async (req, res) => {
+  try {
+    const influencerId = req.user?.id;
+    const { companyId } = req.params;
+    const { status } = req.body;
+
+    // Find the company that sent the invitation
+    const company = await CustomerModel.findById(companyId);
+    if (!company) {
+      return sendResponse(res, 404, false, "Company not found");
+    }
+
+    // Find the invitation in the company's invitedInfluencers array
+    const invitationIndex = company.invitedInfluencers.findIndex(
+      (inv) => inv.influencerId.toString() === influencerId.toString()
+    );
+
+    if (invitationIndex === -1) {
+      return sendResponse(res, 404, false, "Invitation not found");
+    }
+
+    // Get the invitation object
+    const invitation = company.invitedInfluencers[invitationIndex];
+    console.log("Found invitation:", invitation);
+
+    // Process based on the status (accepted or rejected)
+    if (status === "rejected") {
+      // If status is 'rejected', directly remove the invitation and clean up data
+      company.invitedInfluencers.splice(invitationIndex, 1);
+    } else if (status === "accepted") {
+      // If status is 'accepted', add influencer to companyInfluencers array
+      company.companyInfluencers.push({
+        influencerId: influencerId,
+        status: "accepted",
+        assignedDate: new Date(),
+      });
+      // Remove the invitation after acceptance
+      company.invitedInfluencers.splice(invitationIndex, 1);
+    }
+
+    // Save the changes
+    await company.save();
+    return sendResponse(res, 200, true, `Invitation ${status} successfully`);
+  } catch (error) {
+    console.error("Error handling invitation:", error);
+    return sendResponse(
+      res,
+      500,
+      false,
+      "Internal server error",
+      error.message
+    );
+  }
+};
+
+exports.getAllInvitations = async (req, res) => {
+  try {
+    const influencerId = req.user?.id;
+    if (!influencerId) {
+      return res.status(400).json({ message: "Influencer ID is required" });
+    }
+    const { page = 1, limit = 10, search = "" } = req.query;
+    // Calculate pagination parameters
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Build the search query
+    const searchQuery = {
+      "invitedInfluencers.influencerId": influencerId,
+      $or: [
+        {
+          "companyDetails.companyInfo.companyName": {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        { email: { $regex: search, $options: "i" } },
+      ],
+    };
+
+    // Find companies with invitations
+    const companiesWithInvitations = await CustomerModel.find(searchQuery)
+      .select({
+        name: 1,
+        email: 1,
+        "companyDetails.companyInfo.companyName": 1,
+        "companyDetails.companyInfo.companyAbout": 1,
+        "companyDetails.companyLogo": 1,
+        invitedInfluencers: {
+          $elemMatch: {
+            influencerId: influencerId,
+          },
+        },
+      })
+      .skip(skip)
+      .limit(limitNumber);
+
+    // Count total matching documents for pagination
+    const totalItems = await CustomerModel.countDocuments(searchQuery);
+
+    // If no invitations found
+    if (!companiesWithInvitations || companiesWithInvitations.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No invitations found for this influencer" });
+    }
+
+    // Format the results to be more user-friendly
+    const formattedInvitations = companiesWithInvitations.map((company) => ({
+      companyId: company._id,
+      invitationId: company.invitedInfluencers[0]?.influencerId,
+      companyName:
+        company.companyDetails?.companyInfo?.companyName || company.name,
+      companyEmail: company.email,
+      companyLogo: company.companyDetails?.companyLogo?.url,
+      invitationStatus: company.invitedInfluencers[0]?.status,
+      invitationDate: company.invitedInfluencers[0]?.invitationDate,
+    }));
+
+    return res.status(200).json({
+      invitations: formattedInvitations,
+      pagination: {
+        currentPage: pageNumber,
+        totalPages: Math.ceil(totalItems / limitNumber),
+        totalItems,
+      },
+    });
+  } catch (error) {
+    console.error("Error finding influencer invitations:", error);
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
+  }
+};
