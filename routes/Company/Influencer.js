@@ -15,7 +15,30 @@ router.get(
   InfluencerController.getCompanyPromotionRequests
 );
 
+router.patch(
+  "/:productId/request/:influencerId",
+  companyVerify,
+  InfluencerController.toggleRequestStatus
+);
 
-router.get("/my-influencers", companyVerify, InfluencerController.getMyInfluencers);
+router.get(
+  "/my-influencers",
+  companyVerify,
+  InfluencerController.getMyInfluencers
+);
+
+// Route to get all influencers
+router.get(
+  "/all-influencers",
+  companyVerify,
+  InfluencerController.getAllInfluencers
+);
+
+router.get(
+  "/invited-influencers",
+  companyVerify,
+  InfluencerController.getCompanyInfluencersAndInvites
+);
+
 
 module.exports = router;
