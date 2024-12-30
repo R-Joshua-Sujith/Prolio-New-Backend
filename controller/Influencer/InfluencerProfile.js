@@ -454,7 +454,6 @@ exports.getPromotionStatus = async (req, res) => {
   }
 };
 
-
 exports.getMyCompanies = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = "" } = req.query;
@@ -465,7 +464,6 @@ exports.getMyCompanies = async (req, res) => {
       return sendResponse(res, 400, false, "Influencer ID is required");
     }
 
-    // First check if the user is an influencer
     const influencer = await CustomerModel.findById(influencerId);
     if (!influencer || !influencer.isInfluencer.verified) {
       return sendResponse(res, 400, false, "User is not a verified influencer");
@@ -497,12 +495,35 @@ exports.getMyCompanies = async (req, res) => {
               $match: {
                 $expr: {
                   $and: [
-                    { $eq: ["$companyId", "$$companyId"] },
-                    { $in: [new mongoose.Types.ObjectId(influencerId), "$assignedInfluencers"] },
-                  ],
-                },
-              },
-            },
+                    { $eq: ["$ownerId", "$$companyId"] },
+                    {
+                      $gt: [
+                        {
+                          $size: {
+                            $ifNull: [
+                              {
+                                $filter: {
+                                  input: { $ifNull: ["$productAssign", []] },
+                                  as: "assign",
+                                  cond: {
+                                    $and: [
+                                      { $eq: ["$$assign.influencerId", new mongoose.Types.ObjectId(influencerId)] },
+                                      { $eq: ["$$assign.status", "accepted"] }
+                                    ]
+                                  }
+                                }
+                              },
+                              []
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
           ],
           as: "assignedProducts",
         },
@@ -519,19 +540,65 @@ exports.getMyCompanies = async (req, res) => {
           contactInfo: "$companyDetails.contactInfo",
           assignedProducts: {
             $map: {
-              input: "$assignedProducts",
+              input: { $ifNull: ["$assignedProducts", []] },
               as: "product",
               in: {
                 _id: "$$product._id",
-                name: "$$product.name",
-                description: "$$product.description",
-                price: "$$product.price",
-                images: "$$product.images",
+                name: "$$product.basicDetails.name",
+                description: "$$product.basicDetails.description",
+                price: "$$product.basicDetails.price",
+                slug: "$$product.basicDetails.slug",  // Added slug field here
+                images: {
+                  $map: {
+                    input: { $ifNull: ["$$product.images", []] },
+                    as: "image",
+                    in: {
+                      url: "$$image.url",
+                      publicId: "$$image.publicId"
+                    }
+                  }
+                },
                 status: "$$product.status",
+                colors: {
+                  $map: {
+                    input: { $ifNull: ["$$product.colors", []] },
+                    as: "color",
+                    in: {
+                      name: "$$color.name",
+                      price: "$$color.price",
+                      images: {
+                        $map: {
+                          input: { $ifNull: ["$$color.images", []] },
+                          as: "colorImage",
+                          in: {
+                            url: "$$colorImage.url",
+                            publicId: "$$colorImage.publicId"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                assignmentDetails: {
+                  $ifNull: [
+                    {
+                      $filter: {
+                        input: { $ifNull: ["$$product.productAssign", []] },
+                        as: "assign",
+                        cond: { 
+                          $eq: ["$$assign.influencerId", new mongoose.Types.ObjectId(influencerId)]
+                        }
+                      }
+                    },
+                    []
+                  ]
+                }
               },
             },
           },
-          totalAssignedProducts: { $size: "$assignedProducts" },
+          totalAssignedProducts: { 
+            $size: { $ifNull: ["$assignedProducts", []] }
+          },
         },
       },
       { $sort: { createdAt: -1 } },
