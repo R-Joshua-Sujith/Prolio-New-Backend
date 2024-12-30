@@ -3,9 +3,16 @@ const Schema = mongoose.Schema;
 
 const departmentSchema = new Schema(
   {
-    name: { type: String },
+    name: { type: String, required: true },
+    users: [{
+      type: Schema.Types.ObjectId,
+      ref: "CompanyUser"
+    }]
   },
-  { _id: true }
+  {
+    timestamps: true,
+    _id: true
+  }
 );
 
 const customerSchema = new Schema(
