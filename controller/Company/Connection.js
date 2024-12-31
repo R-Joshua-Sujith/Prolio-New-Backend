@@ -5,6 +5,7 @@ const sendResponse = require("../../utils/responseHandler");
 exports.createConnection = async (req, res) => {
   try {
     const { forumOwner, participant, forumId } = req.body;
+    console.log("Request Body:", req.body);
 
     // Basic validation
     if (!forumOwner || !participant) {
