@@ -23,11 +23,7 @@ router.post(
   companyController.registerCompany
 );
 
-router.get(
-  "/company-status",
-  looseVerify,
-  companyController.checkCompanyStatus
-);
+
 
 router.get("/company-details/:productId", companyController.getCompanyDetails);
 

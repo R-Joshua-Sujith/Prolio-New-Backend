@@ -116,30 +116,7 @@ const companyController = {
     }
   },
 
-  checkCompanyStatus: async (req, res) => {
-    try {
-      const userId = req.user?.id;
-      const user = await Customer.findById(userId, "isCompany status");
-      if (!user) {
-        return sendResponse(res, 404, false, "User not found");
-      }
 
-      const isCompanyVerified = user.isCompany?.verified || false;
-      return sendResponse(
-        res,
-        200,
-        true,
-        "Company status fetched successfully",
-        {
-          status: user.status,
-          isCompanyVerified,
-        }
-      );
-    } catch (error) {
-      console.error("Error fetching company status:", error.message);
-      return sendResponse(res, 500, false, "Error fetching company status");
-    }
-  },
 
   getCompanyDetails: async (req, res) => {
     try {
