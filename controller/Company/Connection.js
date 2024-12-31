@@ -1,110 +1,212 @@
 const mongoose = require("mongoose");
 const OwnerConnections = require("../../models/Connection");
 const sendResponse = require("../../utils/responseHandler");
+const Customer = require("../../models/Customer");
+
+// exports.createConnection = async (req, res) => {
+//   try {
+//     const { forumOwner, participant, forumId } = req.body;
+
+//     // Basic validation
+//     if (!forumOwner || !participant) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "ForumOwner and participant are required fields",
+//       });
+//     }
+
+//     // Find owner's connections or create new document
+//     let ownerConnections = await OwnerConnections.findOne({ forumOwner });
+
+//     // If owner document exists, check for duplicate connection
+//     if (ownerConnections) {
+//       const existingConnection = ownerConnections.connections.find(
+//         (conn) => conn.participant.toString() === participant
+//       );
+
+//       if (existingConnection) {
+//         return res.status(200).json({
+//           success: true,
+//           message: "Connection already exists",
+//         });
+//       }
+
+//       // Add new connection to existing document
+//       const newConnection = {
+//         participant,
+//         ...(forum && { forum }),
+//       };
+
+//       ownerConnections.connections.push(newConnection);
+//     } else {
+//       // Create new document for owner
+//       ownerConnections = new OwnerConnections({
+//         forumOwner,
+//         connections: [
+//           {
+//             participant,
+//             ...(forum && { forum }),
+//           },
+//         ],
+//       });
+//     }
+
+//     // Save the document
+//     await ownerConnections.save();
+
+//     // Get the newly added connection with populated fields
+//     const updatedOwner = await OwnerConnections.findOne({ forumOwner })
+//       .populate({
+//         path: "connections.participant",
+//         model: "Customer",
+//         select: "name email profile.url", // Added profile.url for avatar
+//       })
+//       .populate({
+//         path: "connections.forum",
+//         model: "Forum",
+//         select: "forumName forumImage", // Updated to match your Forum model fields
+//       });
+
+//     const newConnection =
+//       updatedOwner.connections[updatedOwner.connections.length - 1];
+
+//     // Format the response with fields from your Customer model
+//     const responseData = {
+//       connectionId: newConnection._id,
+//       participant: {
+//         id: newConnection.participant._id,
+//         name: newConnection.participant.name,
+//         email: newConnection.participant.email,
+//         profileImage: newConnection.participant.profile?.url || null,
+//       },
+//       createdAt: newConnection.createdAt,
+//     };
+
+//     // Add forum data if it exists, using your Forum model fields
+//     if (newConnection.forum) {
+//       responseData.forum = {
+//         id: newConnection.forum._id,
+//         name: newConnection.forum.forumName,
+//         image: newConnection.forum.forumImage || null,
+//       };
+//     }
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Connection created successfully",
+//       data: responseData,
+//     });
+//   } catch (error) {
+//     console.error("Connection creation error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to create connection",
+//     });
+//   }
+// };
+
+// Get all connections for a forum
 
 exports.createConnection = async (req, res) => {
   try {
-    const { forumOwner, participant, forumId } = req.body;
+    const forumOwner = req.user?.id;
+    const { participant } = req.body;
 
-    // Basic validation
-    if (!forumOwner || !participant) {
+    console.log('Creating connection:', { forumOwner, participant });
+
+    // Validate required fields
+    if (!forumOwner || !mongoose.Types.ObjectId.isValid(forumOwner)) {
       return res.status(400).json({
         success: false,
-        message: "ForumOwner and participant are required fields",
+        message: "Valid forumOwner ID is required"
       });
     }
 
-    // Find owner's connections or create new document
+    if (!participant || !mongoose.Types.ObjectId.isValid(participant)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid participant ID is required"
+      });
+    }
+
+    // Check if both users exist
+    const [ownerExists, participantExists] = await Promise.all([
+      Customer.findById(forumOwner),
+      Customer.findById(participant)
+    ]);
+
+    if (!ownerExists || !participantExists) {
+      return res.status(404).json({
+        success: false,
+        message: !ownerExists ? "Forum owner not found" : "Participant not found"
+      });
+    }
+
+    // Find or create owner's connections
     let ownerConnections = await OwnerConnections.findOne({ forumOwner });
 
-    // If owner document exists, check for duplicate connection
     if (ownerConnections) {
+      // Check for existing connection
       const existingConnection = ownerConnections.connections.find(
-        (conn) => conn.participant.toString() === participant
+        conn => conn.participant.toString() === participant
       );
 
       if (existingConnection) {
         return res.status(200).json({
           success: true,
-          message: "Connection already exists",
+          message: "Connection already exists"
         });
       }
 
-      // Add new connection to existing document
-      const newConnection = {
-        participant,
-        ...(forum && { forum }),
-      };
-
-      ownerConnections.connections.push(newConnection);
+      // Add new connection
+      ownerConnections.connections.push({ participant });
     } else {
-      // Create new document for owner
+      // Create new connections document
       ownerConnections = new OwnerConnections({
         forumOwner,
-        connections: [
-          {
-            participant,
-            ...(forum && { forum }),
-          },
-        ],
+        connections: [{ participant }]
       });
     }
 
     // Save the document
     await ownerConnections.save();
 
-    // Get the newly added connection with populated fields
+    // Get updated connection with populated fields
     const updatedOwner = await OwnerConnections.findOne({ forumOwner })
       .populate({
         path: "connections.participant",
-        model: "Customer",
-        select: "name email profile.url", // Added profile.url for avatar
-      })
-      .populate({
-        path: "connections.forum",
-        model: "Forum",
-        select: "forumName forumImage", // Updated to match your Forum model fields
+        select: "name email profile.url"
       });
 
-    const newConnection =
-      updatedOwner.connections[updatedOwner.connections.length - 1];
+    const newConnection = updatedOwner.connections[updatedOwner.connections.length - 1];
 
-    // Format the response with fields from your Customer model
     const responseData = {
       connectionId: newConnection._id,
       participant: {
         id: newConnection.participant._id,
         name: newConnection.participant.name,
         email: newConnection.participant.email,
-        profileImage: newConnection.participant.profile?.url || null,
+        profileImage: newConnection.participant.profile?.url || null
       },
-      createdAt: newConnection.createdAt,
+      createdAt: newConnection.createdAt
     };
-
-    // Add forum data if it exists, using your Forum model fields
-    if (newConnection.forum) {
-      responseData.forum = {
-        id: newConnection.forum._id,
-        name: newConnection.forum.forumName,
-        image: newConnection.forum.forumImage || null,
-      };
-    }
 
     return res.status(201).json({
       success: true,
       message: "Connection created successfully",
-      data: responseData,
+      data: responseData
     });
+
   } catch (error) {
     console.error("Connection creation error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to create connection",
+      error: error.message
     });
   }
 };
 
-// Get all connections for a forum
 exports.getForumConnections = async (req, res) => {
   try {
     const { forumId } = req.params;
