@@ -92,36 +92,58 @@ const getCustomerWishlist = async (req, res) => {
       select: "basicDetails images colors ownerId",
       populate: {
         path: "ownerId",
-        model: "Customer", // Assuming the model is named 'Customer'
+        model: "Customer",
         select:
           "companyDetails.companyInfo.companyName companyDetails.companyInfo.logo",
       },
     });
 
     if (!wishlist) {
-      return res.status(404).json({ message: "Wishlist not found" });
+      return res.status(200).json({
+        products: [],
+        message: "No items in wishlist",
+      });
     }
 
-    // Transform the wishlist to ensure clean data structure
+    // Transform the wishlist and filter out null products
     const transformedWishlist = {
       ...wishlist.toObject(),
-      products: wishlist.products.map((item) => ({
-        ...item.toObject(),
-        productId: {
-          ...item.productId.toObject(),
-          ownerCompanyName:
-            item.productId.ownerId?.companyDetails?.companyInfo?.companyName ||
-            null,
-          ownerCompanyLogo:
-            item.productId.ownerId?.companyDetails?.companyInfo?.logo || null,
-        },
-      })),
+      products: wishlist.products
+        .filter((item) => item && item.productId) // Filter out null/undefined products
+        .map((item) => {
+          try {
+            const productObj = item.toObject();
+            const productData = productObj.productId || {};
+
+            return {
+              ...productObj,
+              productId: {
+                ...productData,
+                ownerCompanyName:
+                  productData.ownerId?.companyDetails?.companyInfo
+                    ?.companyName || null,
+                ownerCompanyLogo:
+                  productData.ownerId?.companyDetails?.companyInfo?.logo ||
+                  null,
+              },
+            };
+          } catch (err) {
+            console.error("Error transforming wishlist item:", err);
+            return null;
+          }
+        })
+        .filter(Boolean), // Remove any null items from transformation errors
     };
 
-    res.status(200).json(transformedWishlist);
+    res.status(200).json({
+      success: true,
+      message: "Wishlist fetched successfully",
+      data: transformedWishlist,
+    });
   } catch (error) {
     console.error("Error in getCustomerWishlist:", error);
     res.status(500).json({
+      success: false,
       message: "Internal server error",
       error: error.message,
     });
