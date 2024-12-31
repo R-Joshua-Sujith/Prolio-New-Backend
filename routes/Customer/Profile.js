@@ -27,4 +27,9 @@ router.get(
   profileContoller.getCustomerProfile
 );
 
+router.get(
+  "/customer-status",
+  customerVerify,
+  profileContoller.checkCustomerStatus
+);
 module.exports = router;
