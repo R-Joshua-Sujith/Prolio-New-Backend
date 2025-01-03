@@ -1185,8 +1185,6 @@ const getProductStats = async (req, res) => {
   }
 };
 
-
-
 const getCompanyProductsIds = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -1195,17 +1193,63 @@ const getCompanyProductsIds = async (req, res) => {
       return sendResponse(res, 400, false, "User ID is required");
     }
 
-    const products = await ProductModel.find({ companyId: userId })
-      .sort({ createdAt: -1 });
+    const products = await ProductModel.find({ companyId: userId }).sort({
+      createdAt: -1,
+    });
 
-    return sendResponse(res, 200, true, "Products fetched successfully", { products });
+    return sendResponse(res, 200, true, "Products fetched successfully", {
+      products,
+    });
   } catch (error) {
     console.error("Error fetching company products:", error);
     return sendResponse(res, 500, false, "Internal Server Error");
   }
 };
 
+const assignProducts = async (req, res) => {
+  try {
+    const { productIds, influencerId } = req.body;
 
+    // Validate inputs
+    if (!productIds || !productIds.length || !influencerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Product IDs and influencer ID are required",
+      });
+    }
+
+    // Update each product with the influencer assignment
+    const updatePromises = productIds.map(async (productId) => {
+      const product = await ProductModel.findById(productId);
+
+      if (!product) {
+        throw new Error(`Product with ID ${productId} not found`);
+      }
+
+      // Add new assignment to productAssign array
+      product.productAssign.push({
+        influencerId: influencerId,
+        status: "accepted",
+        assignedDate: new Date(),
+      });
+
+      return product.save();
+    });
+
+    await Promise.all(updatePromises);
+
+    return res.status(200).json({
+      success: true,
+      message: "Products assigned successfully",
+    });
+  } catch (error) {
+    console.error("Error in assignProducts:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Error assigning products",
+    });
+  }
+};
 
 module.exports = {
   test,
@@ -1226,4 +1270,5 @@ module.exports = {
   getProductNames,
   toggleVisibility,
   getProductStats,
+  assignProducts
 };

@@ -2,7 +2,10 @@ const express = require("express");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const CustomerModel = require("../../models/Customer");
-const { companyVerify } = require("../../controller/Company/Middleware/auth");
+const {
+  companyVerify,
+  looseVerify,
+} = require("../../controller/Company/Middleware/auth");
 const { customerVerify } = require("../../controller/Customer/Middleware/auth");
 const OpportunityModel = require("../../models/Opportunity");
 const router = express.Router();
@@ -86,7 +89,7 @@ router.post(
 router.post("/share-products", companyVerify, forumController.shareProducts);
 
 // Endpoint to get all customers
-router.get("/all-users", companyVerify, forumController.getAllCustomers);
+router.get("/all-users", looseVerify, forumController.getAllCustomers);
 
 // Route to check the invited users for a specific forum
 router.get(
