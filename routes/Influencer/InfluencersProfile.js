@@ -70,4 +70,11 @@ router.get(
   influencerController.getAllInvitations
 );
 
+router.get(
+  "/influencer-products/:id",
+  influencerVerify,
+  influencerController.getInfluencerAssignedProducts
+);
+
+
 module.exports = router;
