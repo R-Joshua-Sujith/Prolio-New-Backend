@@ -112,33 +112,35 @@ exports.createConnection = async (req, res) => {
     const forumOwner = req.user?.id;
     const { participant } = req.body;
 
-    console.log('Creating connection:', { forumOwner, participant });
+    console.log("Creating connection:", { forumOwner, participant });
 
     // Validate required fields
     if (!forumOwner || !mongoose.Types.ObjectId.isValid(forumOwner)) {
       return res.status(400).json({
         success: false,
-        message: "Valid forumOwner ID is required"
+        message: "Valid forumOwner ID is required",
       });
     }
 
     if (!participant || !mongoose.Types.ObjectId.isValid(participant)) {
       return res.status(400).json({
         success: false,
-        message: "Valid participant ID is required"
+        message: "Valid participant ID is required",
       });
     }
 
     // Check if both users exist
     const [ownerExists, participantExists] = await Promise.all([
       Customer.findById(forumOwner),
-      Customer.findById(participant)
+      Customer.findById(participant),
     ]);
 
     if (!ownerExists || !participantExists) {
       return res.status(404).json({
         success: false,
-        message: !ownerExists ? "Forum owner not found" : "Participant not found"
+        message: !ownerExists
+          ? "Forum owner not found"
+          : "Participant not found",
       });
     }
 
@@ -148,13 +150,13 @@ exports.createConnection = async (req, res) => {
     if (ownerConnections) {
       // Check for existing connection
       const existingConnection = ownerConnections.connections.find(
-        conn => conn.participant.toString() === participant
+        (conn) => conn.participant.toString() === participant
       );
 
       if (existingConnection) {
         return res.status(200).json({
           success: true,
-          message: "Connection already exists"
+          message: "Connection already exists",
         });
       }
 
@@ -164,7 +166,7 @@ exports.createConnection = async (req, res) => {
       // Create new connections document
       ownerConnections = new OwnerConnections({
         forumOwner,
-        connections: [{ participant }]
+        connections: [{ participant }],
       });
     }
 
@@ -172,13 +174,15 @@ exports.createConnection = async (req, res) => {
     await ownerConnections.save();
 
     // Get updated connection with populated fields
-    const updatedOwner = await OwnerConnections.findOne({ forumOwner })
-      .populate({
-        path: "connections.participant",
-        select: "name email profile.url"
-      });
+    const updatedOwner = await OwnerConnections.findOne({
+      forumOwner,
+    }).populate({
+      path: "connections.participant",
+      select: "name email profile.url",
+    });
 
-    const newConnection = updatedOwner.connections[updatedOwner.connections.length - 1];
+    const newConnection =
+      updatedOwner.connections[updatedOwner.connections.length - 1];
 
     const responseData = {
       connectionId: newConnection._id,
@@ -186,23 +190,22 @@ exports.createConnection = async (req, res) => {
         id: newConnection.participant._id,
         name: newConnection.participant.name,
         email: newConnection.participant.email,
-        profileImage: newConnection.participant.profile?.url || null
+        profileImage: newConnection.participant.profile?.url || null,
       },
-      createdAt: newConnection.createdAt
+      createdAt: newConnection.createdAt,
     };
 
     return res.status(201).json({
       success: true,
       message: "Connection created successfully",
-      data: responseData
+      data: responseData,
     });
-
   } catch (error) {
     console.error("Connection creation error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to create connection",
-      error: error.message
+      error: error.message,
     });
   }
 };

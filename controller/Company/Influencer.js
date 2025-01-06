@@ -103,7 +103,6 @@ exports.getCompanyPromotionRequests = async (req, res) => {
       return sendResponse(res, 400, "User not authenticated.");
     }
 
-    // Extract query parameters
     const {
       page = 1,
       pageSize = 10,
@@ -111,42 +110,36 @@ exports.getCompanyPromotionRequests = async (req, res) => {
       status = "pending",
     } = req.query;
 
-    // Convert page and pageSize to numbers
     const pageNum = parseInt(page);
     const limit = parseInt(pageSize);
     const skip = (pageNum - 1) * limit;
 
-    // Find the company's products
     const products = await ProductModel.find({ ownerId: companyId }).select(
-      "_id productRequests"
+      "_id"
     );
 
     if (!products.length) {
       return sendResponse(res, 404, "No products found for this company.");
     }
 
-    // Get all product IDs
     const productIds = products.map((product) => product._id);
 
-    // Build the search query
-    const searchQuery = search
+    const baseMatchStage = { _id: { $in: productIds } };
+    const statusMatchStage = { "productRequests.status": status };
+
+    const searchMatchStage = search
       ? {
           $or: [
-            { "influencerId.name": { $regex: search, $options: "i" } },
-            { "influencerId.email": { $regex: search, $options: "i" } },
+            { "influencerDetails.name": { $regex: search, $options: "i" } },
+            { "influencerDetails.email": { $regex: search, $options: "i" } },
+            { "influencerDetails.contact": { $regex: search, $options: "i" } },
           ],
         }
       : {};
 
-    // Aggregate to get filtered and paginated results
     const aggregationPipeline = [
-      // Match products owned by the company
-      { $match: { _id: { $in: productIds } } },
-
-      // Unwind the productRequests array
+      { $match: baseMatchStage },
       { $unwind: "$productRequests" },
-
-      // Lookup to get influencer details
       {
         $lookup: {
           from: "customers",
@@ -155,19 +148,12 @@ exports.getCompanyPromotionRequests = async (req, res) => {
           as: "influencerDetails",
         },
       },
-
-      // Unwind the looked up influencer
       { $unwind: "$influencerDetails" },
-
-      // Match status and search criteria
       {
         $match: {
-          "productRequests.status": status,
-          ...searchQuery,
+          $and: [statusMatchStage, searchMatchStage],
         },
       },
-
-      // Project the required fields
       {
         $project: {
           productId: "$_id",
@@ -179,23 +165,17 @@ exports.getCompanyPromotionRequests = async (req, res) => {
       },
     ];
 
-    // Execute aggregation for total count
     const totalItems = await ProductModel.aggregate([
       ...aggregationPipeline,
       { $count: "total" },
     ]);
 
-    // Add pagination to the pipeline
-    const paginatedPipeline = [
+    const requests = await ProductModel.aggregate([
       ...aggregationPipeline,
       { $skip: skip },
       { $limit: limit },
-    ];
+    ]);
 
-    // Execute the paginated aggregation
-    const requests = await ProductModel.aggregate(paginatedPipeline);
-
-    // Calculate status counts
     const statusCounts = {
       pending: 0,
       accepted: 0,
