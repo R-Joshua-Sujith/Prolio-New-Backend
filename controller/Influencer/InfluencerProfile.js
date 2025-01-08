@@ -869,3 +869,155 @@ exports.getAllInvitations = async (req, res) => {
       .json({ message: "Internal Server Error", error: error.message });
   }
 };
+
+exports.getInfluencerAssignedProducts = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const influencerId = req.params.id;
+    const companyId = req.user?.id;
+    const skip = (page - 1) * limit;
+
+    if (!mongoose.Types.ObjectId.isValid(influencerId)) {
+      return sendResponse(res, 400, false, "Invalid influencer ID");
+    }
+
+    const influencer = await CustomerModel.findOne({
+      _id: influencerId,
+      "isInfluencer.verified": true,
+    });
+
+    if (!influencer) {
+      return sendResponse(
+        res,
+        404,
+        false,
+        "Influencer not found or not verified"
+      );
+    }
+
+    const isInfluencerAssociated = await CustomerModel.findOne({
+      _id: companyId,
+      "companyInfluencers.influencerId": influencerId,
+      "companyInfluencers.status": "accepted",
+    });
+
+    if (!isInfluencerAssociated) {
+      return sendResponse(
+        res,
+        403,
+        false,
+        "Influencer is not associated with your company"
+      );
+    }
+
+    const assignedProducts = await ProductModel.aggregate([
+      {
+        $match: {
+          ownerId: new mongoose.Types.ObjectId(companyId),
+          productAssign: {
+            $elemMatch: {
+              influencerId: new mongoose.Types.ObjectId(influencerId),
+              status: "accepted",
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          basicDetails: 1,
+          images: {
+            $map: {
+              input: "$images",
+              as: "image",
+              in: {
+                url: "$$image.url",
+                publicId: "$$image.publicId",
+              },
+            },
+          },
+          colors: {
+            $map: {
+              input: "$colors",
+              as: "color",
+              in: {
+                name: "$$color.name",
+                price: "$$color.price",
+                images: "$$color.images",
+              },
+            },
+          },
+          status: 1,
+          assignmentDetails: {
+            $filter: {
+              input: "$productAssign",
+              as: "assign",
+              cond: {
+                $eq: [
+                  "$$assign.influencerId",
+                  new mongoose.Types.ObjectId(influencerId),
+                ],
+              },
+            },
+          },
+          totalViews: 1,
+          shareCount: 1,
+          createdAt: 1,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+    ]);
+
+    // Fixed model name here
+    const totalCount = await ProductModel.countDocuments({
+      ownerId: companyId,
+      productAssign: {
+        $elemMatch: {
+          influencerId: influencerId,
+          status: "accepted",
+        },
+      },
+    });
+
+    const responseData = {
+      influencer: {
+        id: influencer._id,
+        name: influencer.name,
+        email: influencer.email,
+        phone: influencer.phone,
+        profile: influencer.profile,
+      },
+      products: assignedProducts.map((product) => ({
+        id: product._id,
+        name: product.basicDetails.name,
+        price: product.basicDetails.price,
+        description: product.basicDetails.description,
+        slug: product.basicDetails.slug,
+        images: product.images,
+        colors: product.colors,
+        status: product.status,
+        assignmentDetails: product.assignmentDetails[0],
+        totalViews: product.totalViews,
+        shareCount: product.shareCount,
+      })),
+      pagination: {
+        totalItems: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: parseInt(page),
+        perPage: parseInt(limit),
+      },
+    };
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Assigned products retrieved successfully",
+      responseData
+    );
+  } catch (error) {
+    console.error("Error fetching assigned products:", error);
+    return sendResponse(res, 500, false, "Failed to fetch assigned products");
+  }
+};

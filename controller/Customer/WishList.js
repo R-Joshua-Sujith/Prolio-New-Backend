@@ -1,83 +1,142 @@
 const Wishlist = require("../../models/WishList"); // Adjust the path as needed
 const mongoose = require("mongoose");
 const Product = require("../../models/Product");
+const { sendResponse } = require("../../utils/responseHandler");
 
 // Create a new wishlist item
+// const createWishlistItem = async (req, res) => {
+//   try {
+//     const { productId } = req.params;
+//     const customerId = req.user.id;
+
+//     // Validate input
+//     if (!customerId || !productId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Customer ID and Product ID are required.",
+//       });
+//     }
+
+//     // Validate if product exists
+//     const product = await Product.findById(productId);
+//     if (!product) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Product not found.",
+//       });
+//     }
+
+//     // Find existing wishlist or create a new one
+//     let wishlist = await Wishlist.findOne({ customerId });
+
+//     if (!wishlist) {
+//       // Create a new wishlist if none exists
+//       wishlist = new Wishlist({
+//         customerId,
+//         products: [{ productId }],
+//       });
+//     } else {
+//       // Check if the product already exists in the wishlist
+//       const isProductInWishlist = wishlist.products.some(
+//         (p) => p.productId.toString() === productId
+//       );
+
+//       if (isProductInWishlist) {
+//         return res.status(409).json({
+//           success: false,
+//           message: "Product is already in the wishlist.",
+//         });
+//       }
+
+//       // Add the product to the wishlist
+//       wishlist.products.push({ productId });
+//     }
+
+//     // Save and populate the wishlist with product details
+//     await wishlist.save();
+//     await wishlist.populate("products.productId");
+
+//     res.status(201).json({
+//       success: true,
+//       message: "Product added to wishlist successfully.",
+//       data: wishlist,
+//     });
+//   } catch (error) {
+//     console.error("Error in createWishlistItem:", error);
+
+//     // Handle specific error types
+//     if (error.name === "ValidationError") {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid data.",
+//         details: error.errors,
+//       });
+//     }
+
+//     res.status(500).json({
+//       success: false,
+//       message:
+//         "An unexpected error occurred while adding the product to the wishlist.",
+//       details: error.message,
+//     });
+//   }
+// };
+
 const createWishlistItem = async (req, res) => {
   try {
-    const { productId } = req.params;
-    const customerId = req.user.id;
+    // Get productId from both params and body
+    const productId = req.params.productId;
+    const customerId = req.user?.id;
 
-    // Validate input
-    if (!customerId || !productId) {
-      return res.status(400).json({
-        success: false,
-        message: "Customer ID and Product ID are required.",
-      });
+    console.log("Creating wishlist with:", { productId, customerId, body: req.body });
+
+    if (!customerId) {
+      return sendResponse(res, 401, false, "Customer ID is required");
     }
 
-    // Validate if product exists
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+      return sendResponse(res, 400, false, "Valid product ID is required");
+    }
+
+    // Check if product exists
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found.",
-      });
+      return sendResponse(res, 404, false, "Product not found");
     }
 
-    // Find existing wishlist or create a new one
+    // Find or create wishlist
     let wishlist = await Wishlist.findOne({ customerId });
 
     if (!wishlist) {
-      // Create a new wishlist if none exists
       wishlist = new Wishlist({
         customerId,
-        products: [{ productId }],
+        products: [{
+          productId,
+          addedAt: new Date()
+        }]
       });
     } else {
-      // Check if the product already exists in the wishlist
-      const isProductInWishlist = wishlist.products.some(
-        (p) => p.productId.toString() === productId
+      // Check for duplicate
+      const exists = wishlist.products.some(
+        item => item.productId.toString() === productId
       );
-
-      if (isProductInWishlist) {
-        return res.status(409).json({
-          success: false,
-          message: "Product is already in the wishlist.",
-        });
+      
+      if (exists) {
+        return sendResponse(res, 409, false, "Product already in wishlist");
       }
 
-      // Add the product to the wishlist
-      wishlist.products.push({ productId });
-    }
-
-    // Save and populate the wishlist with product details
-    await wishlist.save();
-    await wishlist.populate("products.productId");
-
-    res.status(201).json({
-      success: true,
-      message: "Product added to wishlist successfully.",
-      data: wishlist,
-    });
-  } catch (error) {
-    console.error("Error in createWishlistItem:", error);
-
-    // Handle specific error types
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid data.",
-        details: error.errors,
+      wishlist.products.push({
+        productId,
+        addedAt: new Date()
       });
     }
 
-    res.status(500).json({
-      success: false,
-      message:
-        "An unexpected error occurred while adding the product to the wishlist.",
-      details: error.message,
-    });
+    await wishlist.save();
+
+    return sendResponse(res, 201, true, "Product added to wishlist successfully");
+  } catch (error) {
+    console.error("Wishlist creation error:", error);
+    return sendResponse(res, 500, false, "Failed to add product to wishlist");
   }
 };
 
@@ -151,71 +210,131 @@ const getCustomerWishlist = async (req, res) => {
 };
 
 // Remove a product from wishlist
+// const removeWishlistItem = async (req, res) => {
+//   try {
+//     const { productId } = req.params;
+//     const customerId = req.user.id;
+
+//     if (!productId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Product ID is required",
+//       });
+//     }
+
+//     // Find and update the wishlist in one operation
+//     const wishlist = await Wishlist.findOneAndUpdate(
+//       { customerId },
+//       { $pull: { products: { productId } } },
+//       {
+//         new: true,
+//         runValidators: true,
+//       }
+//     ).populate("products.productId");
+
+//     // If no wishlist found
+//     if (!wishlist) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Wishlist not found",
+//       });
+//     }
+
+//     // Check if product was actually removed with null check
+//     const wasProductRemoved = wishlist.products.every((p) => {
+//       if (!p || !p.productId) return true; // Skip null/undefined products
+//       return (
+//         p.productId &&
+//         typeof p.productId.toString === "function" &&
+//         p.productId.toString() !== productId
+//       );
+//     });
+
+//     if (!wasProductRemoved) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Product not found in wishlist",
+//       });
+//     }
+
+//     // Filter out any null products before sending response
+//     const cleanWishlist = {
+//       ...wishlist.toObject(),
+//       products: wishlist.products.filter((p) => p && p.productId),
+//     };
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Product removed from wishlist successfully",
+//       data: cleanWishlist,
+//     });
+//   } catch (error) {
+//     console.error("Error removing wishlist item:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       details: error.message,
+//     });
+//   }
+// };
+
 const removeWishlistItem = async (req, res) => {
   try {
-    const { productId } = req.params;
-    const customerId = req.user.id;
+    const customerId = req.user?.id;
+    const productId = req.params.productId; // Changed from id to productId
 
+    console.log("Request params:", req.params);
+    console.log("Removing from wishlist:", { productId, customerId });
+
+    // Validate customerId
+    if (!customerId) {
+      return sendResponse(res, 401, false, "Authentication required");
+    }
+
+    // Validate productId
     if (!productId) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID is required",
-      });
+      return sendResponse(res, 400, false, "Product ID is required");
     }
 
-    // Find and update the wishlist in one operation
-    const wishlist = await Wishlist.findOneAndUpdate(
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return sendResponse(res, 400, false, "Invalid product ID format");
+    }
+
+    // Find wishlist and remove product
+    const updatedWishlist = await Wishlist.findOneAndUpdate(
       { customerId },
-      { $pull: { products: { productId } } },
       {
-        new: true,
-        runValidators: true,
-      }
-    ).populate("products.productId");
-
-    // If no wishlist found
-    if (!wishlist) {
-      return res.status(404).json({
-        success: false,
-        message: "Wishlist not found",
-      });
-    }
-
-    // Check if product was actually removed with null check
-    const wasProductRemoved = wishlist.products.every((p) => {
-      if (!p || !p.productId) return true; // Skip null/undefined products
-      return (
-        p.productId &&
-        typeof p.productId.toString === "function" &&
-        p.productId.toString() !== productId
-      );
+        $pull: {
+          products: {
+            productId: new mongoose.Types.ObjectId(productId),
+          },
+        },
+      },
+      { new: true }
+    ).populate({
+      path: "products.productId",
+      select: "basicDetails images status",
     });
 
-    if (!wasProductRemoved) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found in wishlist",
-      });
+    if (!updatedWishlist) {
+      return sendResponse(res, 404, false, "Wishlist not found");
     }
 
-    // Filter out any null products before sending response
-    const cleanWishlist = {
-      ...wishlist.toObject(),
-      products: wishlist.products.filter((p) => p && p.productId),
-    };
-
-    res.status(200).json({
-      success: true,
-      message: "Product removed from wishlist successfully",
-      data: cleanWishlist,
-    });
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Product removed from wishlist successfully",
+      updatedWishlist
+    );
   } catch (error) {
-    console.error("Error removing wishlist item:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      details: error.message,
-    });
+    console.error("Remove from wishlist error:", error);
+    return sendResponse(
+      res,
+      500,
+      false,
+      "Failed to remove product from wishlist"
+    );
   }
 };
 

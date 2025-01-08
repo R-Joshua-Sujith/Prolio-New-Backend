@@ -671,3 +671,122 @@ exports.getCompanyInfluencersAndInvites = async (req, res) => {
     });
   }
 };
+
+exports.getCompanyActiveProducts = async (req, res) => {
+  try {
+    const companyId = req.user?.id;
+    const { influencerId } = req.query; // Changed from req.params to req.query
+
+    if (!companyId) {
+      return sendResponse(res, 401, false, "User ID not found");
+    }
+
+    // Base query for active products
+    const query = {
+      ownerId: companyId,
+      status: "Active",
+      "block.isBlocked": false,
+    };
+
+    // Add influencer filter if influencerId is provided
+    if (influencerId) {
+      if (!mongoose.Types.ObjectId.isValid(influencerId)) {
+        return sendResponse(res, 400, false, "Invalid influencer ID");
+      }
+
+      // Check if influencer exists and is verified
+      const influencer = await Customer.findOne({
+        _id: influencerId,
+        "isInfluencer.verified": true,
+      });
+
+      if (!influencer) {
+        return sendResponse(
+          res,
+          404,
+          false,
+          "Influencer not found or not verified"
+        );
+      }
+
+      // Add condition to exclude products already assigned to this influencer
+      query.productAssign = {
+        $not: {
+          $elemMatch: {
+            influencerId: new mongoose.Types.ObjectId(influencerId),
+            status: { $in: ["accepted", "pending"] },
+          },
+        },
+      };
+    }
+
+    const activeProducts = await ProductModel.find(query)
+      .select("basicDetails images category totalViews shareCount")
+      .lean();
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Active products retrieved successfully",
+      activeProducts
+    );
+  } catch (error) {
+    console.error("Error fetching active products:", error);
+    return sendResponse(
+      res,
+      500,
+      false,
+      "Failed to fetch active products",
+      error.message
+    );
+  }
+};
+
+exports.removeAssignedProduct = async (req, res) => {
+  try {
+    const companyId = req.user?.id;
+    const { productId, influencerId } = req.body;
+
+    if (!companyId || !productId || !influencerId) {
+      return sendResponse(res, 400, false, "Missing required fields");
+    }
+
+    // Validate ObjectIds
+    if (
+      !mongoose.Types.ObjectId.isValid(productId) ||
+      !mongoose.Types.ObjectId.isValid(influencerId)
+    ) {
+      return sendResponse(res, 400, false, "Invalid product or influencer ID");
+    }
+
+    // Find and update the product
+    const product = await ProductModel.findOneAndUpdate(
+      {
+        _id: productId,
+        ownerId: companyId,
+        "productAssign.influencerId": influencerId,
+      },
+      {
+        $pull: {
+          productAssign: {
+            influencerId: influencerId,
+          },
+        },
+      },
+      { new: true }
+    );
+
+    if (!product) {
+      return sendResponse(res, 404, false, "Product assignment not found");
+    }
+
+    return sendResponse(res, 200, true, "Product unassigned successfully", {
+      productId,
+      influencerId,
+    });
+  } catch (error) {
+    console.error("Error removing assigned product:", error);
+    return sendResponse(res, 500, false, "Failed to remove product assignment");
+  }
+};
