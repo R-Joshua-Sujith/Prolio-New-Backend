@@ -14,7 +14,7 @@ router.get(
 
 router.get(
   "/my-single-product/:slug",
-  customerVerify,
+  // customerVerify,
   customerProductController.getMySingleProduct
 );
 

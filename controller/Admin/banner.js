@@ -4,9 +4,35 @@ const { sendResponse } = require("../../utils/responseHandler");
 
 exports.createBanner = async (req, res) => {
   try {
-    const { description, colors, status = "active" } = req.body;
+    // Check if files exist
+    if (!req.files || req.files.length === 0) {
+      return sendResponse(res, 400, false, "Banner images are required");
+    }
 
-    // Upload multiple files to S3
+    let { description, colors, status = "active" } = req.body;
+
+    try {
+      // Handle optional description and colors
+      if (description) {
+        description =
+          typeof description === "string"
+            ? JSON.parse(description)
+            : description;
+        description = Array.isArray(description) ? description[0] : description;
+      }
+
+      if (colors) {
+        colors = typeof colors === "string" ? JSON.parse(colors) : colors;
+        colors = Array.isArray(colors) ? colors[0] : colors;
+        // Ensure color has # prefix if provided
+        colors = colors.startsWith("#") ? colors : `#${colors}`;
+      }
+    } catch (parseError) {
+      console.error("Error parsing data:", parseError);
+      return sendResponse(res, 400, false, "Invalid data format");
+    }
+
+    // Upload files to S3
     const uploadPromises = req.files.map((file) =>
       uploadToS3(file.buffer, file.originalname, file.mimetype, "banners")
     );
@@ -19,8 +45,8 @@ exports.createBanner = async (req, res) => {
 
     const newBanner = new Banner({
       bannerImg,
-      description,
-      descriptionColor: colors,
+      ...(description && { description }), // Only include if provided
+      ...(colors && { descriptionColor: colors }), // Only include if provided
       status,
     });
 
@@ -84,7 +110,7 @@ exports.deleteBanner = async (req, res) => {
     if (banner.bannerImg && banner.bannerImg.length > 0) {
       for (let img of banner.bannerImg) {
         // Delete each image from S3 by its publicId
-        await deleteFromS3ByPublicId(img.publicId);
+        await deleteFromS3(img.publicId);
       }
     }
 
@@ -126,21 +152,40 @@ exports.getAllBanners = async (req, res) => {
 exports.toggleBannerStatus = async (req, res) => {
   const { bannerId } = req.params;
   try {
-    const banner = await Banner.findById(bannerId);
-    if (!banner) {
+    console.log("Attempting to toggle banner status for ID:", bannerId);
+
+    // Use findByIdAndUpdate to directly update only the status field
+    const updatedBanner = await Banner.findByIdAndUpdate(
+      bannerId,
+      [
+        {
+          $set: {
+            status: {
+              $cond: [{ $eq: ["$status", "active"] }, "inactive", "active"],
+            },
+          },
+        },
+      ],
+      { new: true }
+    );
+
+    if (!updatedBanner) {
+      console.log("Banner not found with ID:", bannerId);
       return sendResponse(res, 404, false, "Banner not found");
     }
-    // Toggle the status
-    banner.status = banner.status === "active" ? "inactive" : "active";
-    await banner.save();
+
+    console.log(
+      `Banner status successfully updated to: ${updatedBanner.status}`
+    );
     return sendResponse(
       res,
       200,
       true,
-      `Banner status updated to ${banner.status}`,
-      banner
+      `Banner status updated to ${updatedBanner.status}`,
+      updatedBanner
     );
   } catch (error) {
+    console.error("Error in toggleBannerStatus:", error);
     return sendResponse(res, 500, false, "Server Error", error.message);
   }
 };
