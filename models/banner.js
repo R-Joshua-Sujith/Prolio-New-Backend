@@ -1,21 +1,28 @@
-// models/banner.js
 const mongoose = require("mongoose");
 
 const bannerSchema = new mongoose.Schema(
   {
     bannerImg: [
       {
-        url: { type: String },
-        publicId: { type: String },
+        url: String,
+        publicId: String,
       },
     ],
-    status: { type: String, default: "active" },
-    description: { type: String, trim: true },
-    descriptionColor: { type: String },
+    description: {
+      type: String,
+      default: "", // Made optional with empty string default
+    },
+    descriptionColor: {
+      type: String,
+      default: "#000000", // Made optional with default black color
+    },
+    status: {
+      type: String,
+      default: "active",
+    },
   },
   { timestamps: true }
 );
 
 const Banner = mongoose.model("Banner", bannerSchema);
-
 module.exports = Banner;

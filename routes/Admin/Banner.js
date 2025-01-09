@@ -31,6 +31,6 @@ router.delete(
 router.get("/all-banners", bannerController.getAllBanners);
 
 // Define the route to toggle the banner status (by ID)
-router.patch("/:bannerId", bannerController.toggleBannerStatus);
+router.patch("/update-banner-status/:bannerId", bannerController.toggleBannerStatus);
 
 module.exports = router;
