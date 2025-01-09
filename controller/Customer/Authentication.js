@@ -23,9 +23,16 @@ exports.test = async (req, res) => {
   }
 };
 
+// Temporary storage for registration attempts (in production, use Redis or similar)
+// Store temporary registration data in memory (use Redis in production)
+const registrationAttempts = new Map();
+
+// Step 1: Initial registration and OTP generation
 exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    // Validate input
     const { errors, isValid } = validateRegistrationInput(
       name,
       email,
@@ -34,7 +41,8 @@ exports.register = async (req, res) => {
     if (!isValid) {
       return res.status(400).json({ success: false, errors });
     }
-    // Check if user already exists with email
+
+    // Check if user already exists
     const existingEmail = await Customer.findOne({ email });
     if (existingEmail) {
       return res.status(400).json({
@@ -42,19 +50,44 @@ exports.register = async (req, res) => {
         error: "Email Already Registered",
       });
     }
+
+    // Generate OTP
+    const otp = generateOTP();
+    const otpExpiry = new Date();
+    otpExpiry.setMinutes(otpExpiry.getMinutes() + 15);
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    // Create new customer
-    const newCustomer = new Customer({
+
+    // Store registration data temporarily
+    registrationAttempts.set(email, {
       name,
       email,
       password: hashedPassword,
-      status: "UnVerified",
+      otp,
+      otpExpiry,
+      createdAt: new Date(),
     });
-    await newCustomer.save();
-    return res.status(201).json({
-      success: true,
-      message: "Registration successful",
+
+    // Send OTP email
+    const emailPayload = {
+      sender: { name: "Prolio", email: "developer@zikrabyte.in" },
+      to: [{ email }],
+      subject: "Your OTP Verification Code",
+      htmlContent: `<p>Your OTP is: ${otp}. This code will expire in 15 minutes.</p>`,
+    };
+
+    const response = await axios.post(BREVO_API_URL, emailPayload, {
+      headers: {
+        "api-key": BREVO_API_KEY,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
     });
+
+    if (response.status === 201) {
+      return sendResponse(res, 200, true, "OTP sent successfully");
+    }
   } catch (error) {
     console.error("Registration error:", error);
     return res.status(500).json({
@@ -63,6 +96,184 @@ exports.register = async (req, res) => {
     });
   }
 };
+
+// Step 2: Resend OTP if needed
+exports.resendOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const registrationData = registrationAttempts.get(email);
+    if (!registrationData) {
+      return sendResponse(res, 400, false, "No pending registration found");
+    }
+
+    // Generate new OTP
+    const otp = generateOTP();
+    const otpExpiry = new Date();
+    otpExpiry.setMinutes(otpExpiry.getMinutes() + 15);
+
+    // Update registration data
+    registrationData.otp = otp;
+    registrationData.otpExpiry = otpExpiry;
+    registrationAttempts.set(email, registrationData);
+
+    // Send new OTP
+    const emailPayload = {
+      sender: { name: "Prolio", email: "developer@zikrabyte.in" },
+      to: [{ email }],
+      subject: "New OTP Verification Code",
+      htmlContent: `<p>Your new OTP is: ${otp}. This code will expire in 15 minutes.</p>`,
+    };
+
+    const response = await axios.post(BREVO_API_URL, emailPayload, {
+      headers: {
+        "api-key": BREVO_API_KEY,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+    });
+
+    if (response.status === 201) {
+      return sendResponse(res, 200, true, "New OTP sent successfully");
+    }
+  } catch (error) {
+    return sendResponse(res, 500, false, error.message);
+  }
+};
+
+// Step 3: Verify OTP and create user
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return sendResponse(res, 400, false, "Email and OTP are required");
+    }
+
+    const registrationData = registrationAttempts.get(email);
+    if (!registrationData) {
+      return sendResponse(
+        res,
+        404,
+        false,
+        "Registration session not found or expired"
+      );
+    }
+
+    // Verify OTP
+    if (registrationData.otp !== parseInt(otp)) {
+      return sendResponse(res, 400, false, "Invalid OTP");
+    }
+
+    // Check OTP expiry
+    if (new Date() > registrationData.otpExpiry) {
+      registrationAttempts.delete(email);
+      return sendResponse(res, 400, false, "OTP has expired");
+    }
+
+    // Create new user only after OTP verification
+    const newCustomer = new Customer({
+      name: registrationData.name,
+      email: registrationData.email,
+      password: registrationData.password,
+      status: "Verified",
+    });
+
+    await newCustomer.save();
+
+    // Clean up registration data
+    registrationAttempts.delete(email);
+
+    return sendResponse(res, 200, true, "Registration completed successfully");
+  } catch (error) {
+    return sendResponse(res, 500, false, error.message);
+  }
+};
+
+// Cleanup expired registration attempts periodically
+setInterval(() => {
+  const now = new Date();
+  for (const [email, data] of registrationAttempts.entries()) {
+    if (now > data.otpExpiry) {
+      registrationAttempts.delete(email);
+    }
+  }
+}, 15 * 60 * 1000); // Run every 15 minutes
+
+// Directly export the verifyOTP function
+// exports.verifyOTP = async (req, res) => {
+//   try {
+//     const { email, otp } = req.body;
+//     if (!email || !otp) {
+//       return sendResponse(res, 400, false, "Email and OTP are required");
+//     }
+//     const user = await Customer.findOne({ email });
+//     if (!user) {
+//       return sendResponse(res, 404, false, "User not found");
+//     }
+//     // Check if OTP matches
+//     const currentTime = new Date();
+//     if (user.otp !== parseInt(otp)) {
+//       return sendResponse(res, 400, false, "Invalid OTP");
+//     }
+//     if (!user.otpExpiry || user.otpExpiry < currentTime) {
+//       return sendResponse(res, 400, false, "OTP has expired");
+//     }
+
+//     // Clear OTP and expiry fields
+//     user.otp = undefined;
+//     user.otpExpiry = undefined;
+//     if (user.status === "UnVerified") {
+//       user.status = "Verified";
+//     }
+//     await user.save();
+
+//     return sendResponse(res, 200, true, "OTP verified successfully");
+//   } catch (error) {
+//     return sendResponse(res, 500, false, error.message);
+//   }
+// };
+
+// exports.register = async (req, res) => {
+//   try {
+//     const { name, email, password } = req.body;
+//     const { errors, isValid } = validateRegistrationInput(
+//       name,
+//       email,
+//       password
+//     );
+//     if (!isValid) {
+//       return res.status(400).json({ success: false, errors });
+//     }
+//     // Check if user already exists with email
+//     const existingEmail = await Customer.findOne({ email });
+//     if (existingEmail) {
+//       return res.status(400).json({
+//         success: false,
+//         error: "Email Already Registered",
+//       });
+//     }
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     // Create new customer
+//     const newCustomer = new Customer({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       status: "UnVerified",
+//     });
+//     await newCustomer.save();
+//     return res.status(201).json({
+//       success: true,
+//       message: "Registration successful",
+//     });
+//   } catch (error) {
+//     console.error("Registration error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       error: error.message,
+//     });
+//   }
+// };
 
 exports.login = async (req, res) => {
   try {
@@ -217,87 +428,53 @@ const generateOTP = () => {
 };
 
 // Controller: Send OTP
-exports.sendOTP = async (req, res) => {
-  console.log("hi");
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return sendResponse(res, 400, false, "Email is required");
-    }
+// exports.sendOTP = async (req, res) => {
+//   console.log("hi");
+//   try {
+//     const { email } = req.body;
+//     if (!email) {
+//       return sendResponse(res, 400, false, "Email is required");
+//     }
 
-    const user = await Customer.findOne({ email });
-    if (!user) {
-      return sendResponse(res, 404, false, "User not found");
-    }
+//     const user = await Customer.findOne({ email });
+//     if (!user) {
+//       return sendResponse(res, 404, false, "User not found");
+//     }
 
-    // Generate OTP and set expiry
-    const otp = generateOTP();
-    const otpExpiry = new Date();
-    otpExpiry.setMinutes(otpExpiry.getMinutes() + 15);
-    user.otp = otp;
-    user.otpExpiry = otpExpiry;
-    await user.save();
+//     // Generate OTP and set expiry
+//     const otp = generateOTP();
+//     const otpExpiry = new Date();
+//     otpExpiry.setMinutes(otpExpiry.getMinutes() + 15);
+//     user.otp = otp;
+//     user.otpExpiry = otpExpiry;
+//     await user.save();
 
-    // Prepare email content
-    const subject = "Your OTP Verification Code";
-    const message = `Your OTP is: ${otp}. This code will expire in 15 minutes.`;
-    const emailPayload = {
-      sender: { name: "Prolio", email: "developer@zikrabyte.in" },
-      to: [{ email }],
-      subject,
-      htmlContent: `<p>${message}</p>`,
-    };
+//     // Prepare email content
+//     const subject = "Your OTP Verification Code";
+//     const message = `Your OTP is: ${otp}. This code will expire in 15 minutes.`;
+//     const emailPayload = {
+//       sender: { name: "Prolio", email: "developer@zikrabyte.in" },
+//       to: [{ email }],
+//       subject,
+//       htmlContent: `<p>${message}</p>`,
+//     };
 
-    console.log("Email payload:", emailPayload);
-    const response = await axios.post(BREVO_API_URL, emailPayload, {
-      headers: {
-        "api-key": BREVO_API_KEY,
-        accept: "application/json",
-        "content-type": "application/json",
-      },
-    });
-    if (response.status === 201) {
-      return sendResponse(res, 200, true, "OTP sent successfully");
-    }
-  } catch (error) {
-    console.error("Error sending OTP:", error.message);
-    return sendResponse(res, 500, false, "Error sending OTP", error.message);
-  }
-};
-
-// Directly export the verifyOTP function
-exports.verifyOTP = async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    if (!email || !otp) {
-      return sendResponse(res, 400, false, "Email and OTP are required");
-    }
-    const user = await Customer.findOne({ email });
-    if (!user) {
-      return sendResponse(res, 404, false, "User not found");
-    }
-    // Check if OTP matches
-    const currentTime = new Date();
-    if (user.otp !== parseInt(otp)) {
-      return sendResponse(res, 400, false, "Invalid OTP");
-    }
-    if (!user.otpExpiry || user.otpExpiry < currentTime) {
-      return sendResponse(res, 400, false, "OTP has expired");
-    }
-
-    // Clear OTP and expiry fields
-    user.otp = undefined;
-    user.otpExpiry = undefined;
-    if (user.status === "UnVerified") {
-      user.status = "Verified";
-    }
-    await user.save();
-
-    return sendResponse(res, 200, true, "OTP verified successfully");
-  } catch (error) {
-    return sendResponse(res, 500, false, error.message);
-  }
-};
+//     console.log("Email payload:", emailPayload);
+//     const response = await axios.post(BREVO_API_URL, emailPayload, {
+//       headers: {
+//         "api-key": BREVO_API_KEY,
+//         accept: "application/json",
+//         "content-type": "application/json",
+//       },
+//     });
+//     if (response.status === 201) {
+//       return sendResponse(res, 200, true, "OTP sent successfully");
+//     }
+//   } catch (error) {
+//     console.error("Error sending OTP:", error.message);
+//     return sendResponse(res, 500, false, "Error sending OTP", error.message);
+//   }
+// };
 
 // Backend controller
 exports.checkCompanyStatus = async (req, res) => {
