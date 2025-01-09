@@ -170,6 +170,7 @@ const getLogsByUserId = async (req, res) => {
           action: 1,
           timestamp: 1,
           targetModel: 1,
+          createdAt: 1, // Include createdAt in the projection
           customerName: "$userDetails.name",
           customerEmail: "$userDetails.email",
         },
