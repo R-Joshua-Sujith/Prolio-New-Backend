@@ -356,9 +356,39 @@ const editFaqQuestion = async (req, res) => {
 const getRejectedFAQs = async (req, res) => {
   try {
     const { page = 1, limit = 6, search = "" } = req.query;
+    const ownerId = req.user.id;
+
+    // Updated query to use ownerId instead of owner
+    const products = await Product.find({
+      ownerId: ownerId,
+    }).select("basicDetails.slug");
+
+    console.log("Owner ID:", ownerId);
+    console.log("Owner Products:", products);
+
+    if (!products?.length) {
+      return res.json({
+        success: true,
+        data: [],
+        pagination: {
+          totalItems: 0,
+          currentPage: parseInt(page),
+          itemsPerPage: parseInt(limit),
+          totalPages: 0,
+        },
+      });
+    }
+
+    // Updated to use basicDetails.slug
+    const productSlugs = products
+      .map((product) => product.basicDetails?.slug)
+      .filter(Boolean);
+
+    console.log("Product Slugs:", productSlugs);
 
     const query = {
       status: "rejected",
+      productSlug: { $in: productSlugs },
       ...(search && {
         $or: [
           { question: { $regex: search, $options: "i" } },
@@ -369,6 +399,7 @@ const getRejectedFAQs = async (req, res) => {
 
     const faqs = await FAQ.find(query)
       .populate("askedBy", "name")
+      .populate("answeredBy", "name")
       .sort({ updatedAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
