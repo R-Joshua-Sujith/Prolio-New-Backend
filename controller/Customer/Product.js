@@ -114,7 +114,6 @@ exports.getProduct = async (req, res) => {
 };
 exports.getMySingleProduct = async (req, res) => {
   const { slug } = req.params;
-  const { latitude, longitude } = req.query;
 
   // const userId = req.user.id;
   try {
@@ -130,19 +129,18 @@ exports.getMySingleProduct = async (req, res) => {
       return res.status(400).json({ error: "Product Not Found" });
     }
 
-    // Check for an existing enquiry for this product by the logged-in user (req.user)
-    const enquiry = await EnquiryModel.findOne({
-      productId: product._id,
-      customerId: req.user?.id,
-    });
+    // // Check for an existing enquiry for this product by the logged-in user (req.user)
+    // const enquiry = await EnquiryModel.findOne({
+    //   productId: product._id,
+    //   customerId: req.user?.id,
+    // });
 
     // Prepare response data
     const responseData = {
       product,
-      enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
+      // enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
     };
 
-    saveVisitedLogs(latitude, longitude, userId, product._id);
     res.status(200).json(responseData);
   } catch (error) {
     console.error(error);
