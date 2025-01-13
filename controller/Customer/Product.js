@@ -174,6 +174,18 @@ exports.getAllProducts = async (req, res) => {
         { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
         { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
       ];
+
+      // Add numeric price search for partial matches
+      if (!isNaN(searchTerm)) {
+        query.$or.push({
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$basicDetails.price" }, // Convert price to string
+              regex: `^${searchTerm}`, // Match starting digits
+            },
+          },
+        });
+      }
     }
     if (category) query["category.categoryId"] = category;
     if (subcategory) query["category.subCategoryId"] = subcategory;
