@@ -176,10 +176,10 @@ exports.getPendingCompanyUsers = async (req, res) => {
         {
           $match: {
             "isCompany.verified": true,
-            $or: [
-              { name: { $regex: search, $options: "i" } },
-              { email: { $regex: search, $options: "i" } },
-            ],
+            "companyDetails.companyInfo.companyName": {
+              $regex: search,
+              $options: "i",
+            }, // Search on companyName
           },
         },
         {
@@ -196,25 +196,20 @@ exports.getPendingCompanyUsers = async (req, res) => {
             totalForums: { $size: "$forums" },
           },
         },
-        // Project fields for the response, including influencer details
+        // Project fields for the response
         {
           $project: {
             name: 1,
             email: 1,
             status: 1,
             companyDetails: 1,
-            totalForums: 1, // Include the forum count in the response
-            isInfluencer: 1, // Add influencer status
-            influencerDetails: 1, // Add influencer details
+            totalForums: 1,
+            isInfluencer: 1,
+            influencerDetails: 1,
           },
         },
-        // Pagination stage: Skip and limit the results
-        {
-          $skip: skip,
-        },
-        {
-          $limit: paginationLimit,
-        },
+        { $skip: skip },
+        { $limit: paginationLimit },
       ]);
 
       if (!customers || customers.length === 0) {
@@ -224,13 +219,9 @@ exports.getPendingCompanyUsers = async (req, res) => {
       // Count the total number of verified companies for pagination
       const totalCompanies = await CustomerModel.countDocuments({
         "isCompany.verified": true,
-        $or: [
-          { name: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-        ],
+        name: { $regex: search, $options: "i" }, // Same simple search for count
       });
 
-      // Return the data under a single `message` field
       return sendResponse(
         res,
         200,
