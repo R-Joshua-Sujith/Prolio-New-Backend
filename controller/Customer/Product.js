@@ -20,43 +20,6 @@ exports.test = async (req, res) => {
   }
 };
 
-// exports.getProduct = async (req, res) => {
-//   const { slug } = req.params;
-//   const { latitude, longitude } = req.query;
-
-//   const userId = req.user.id;
-//   try {
-//     // Find the product by slug
-//     const product = await ProductModel.findOne({
-//       "basicDetails.slug": slug,
-//     }).populate(
-//       "ownerId",
-//       "companyDetails.companyInfo companyDetails.contactInfo"
-//     );
-
-//     if (!product) {
-//       return res.status(400).json({ error: "Product Not Found" });
-//     }
-
-//     // Check for an existing enquiry for this product by the logged-in user (req.user)
-//     const enquiry = await EnquiryModel.findOne({
-//       productId: product._id,
-//       customerId: req.user?.id,
-//     });
-
-//     // Prepare response data
-//     const responseData = {
-//       product,
-//       enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
-//     };
-
-//     saveVisitedLogs(latitude, longitude, userId, product._id);
-//     res.status(200).json(responseData);
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// };
 
 exports.getProduct = async (req, res) => {
   const { slug } = req.params;
@@ -78,7 +41,7 @@ exports.getProduct = async (req, res) => {
           path: "subCategories",
           select: "name", // Select only the name field
         },
-        select: "categoryName subCategories", // Select categoryName and subCategories
+        select: "categoryName subCategories", 
       });
 
     if (!product) {
@@ -128,12 +91,6 @@ exports.getMySingleProduct = async (req, res) => {
     if (!product) {
       return res.status(400).json({ error: "Product Not Found" });
     }
-
-    // // Check for an existing enquiry for this product by the logged-in user (req.user)
-    // const enquiry = await EnquiryModel.findOne({
-    //   productId: product._id,
-    //   customerId: req.user?.id,
-    // });
 
     // Prepare response data
     const responseData = {

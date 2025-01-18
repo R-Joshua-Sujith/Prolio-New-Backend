@@ -6,7 +6,7 @@ const { sendResponse } = require("../../utils/responseHandler");
 // Retrieve User Notifications Endpoint
 exports.getNotifications = async (req, res) => {
   const userId = req.user?.id;
-  const { page = 1, limit = 5 } = req.query; // Default to 5 notifications per page
+  const { page = 1, limit = 5 } = req.query; 
 
   try {
     const skip = (page - 1) * limit;
@@ -46,25 +46,6 @@ exports.getNotifications = async (req, res) => {
   }
 };
 
-// Mark Notifications as Read
-// exports.markNotificationAsRead = async (req, res) => {
-//   const userId = req.user?.id;
-//   const { notificationIds } = req.body;
-
-//   try {
-//     await Notification.updateMany(
-//       {
-//         _id: { $in: notificationIds },
-//         userId,
-//       },
-//       { $set: { isRead: true } }
-//     );
-
-//     return res.status(200).json({ message: "Notifications marked as read" });
-//   } catch (error) {
-//     return res.status(500).json({ message: "Failed to mark notifications" });
-//   }
-// };
 
 // Mark a message as read
 exports.markNotificationAsRead = async (req, res) => {
@@ -211,7 +192,7 @@ exports.getUnreadMessageNotificationsCount = async (req, res) => {
       success: true,
       messages: unreadMessages,
       totalUnreadMessages, // Total unread message count
-      hasMore: unreadMessages.length + skip < totalUnreadMessages, // Check if more messages are available
+      hasMore: unreadMessages.length + skip < totalUnreadMessages,
     });
   } catch (error) {
     console.error("Error fetching unread messages:", error);
@@ -287,7 +268,7 @@ exports.getUnreadMessageNotifications = async (req, res) => {
       success: true,
       messages: messagesWithReadStatus,
       totalMessages, // Total unread message count
-      hasMore: messagesWithReadStatus.length + skip < totalMessages, // Check if more messages are available
+      hasMore: messagesWithReadStatus.length + skip < totalMessages,
     });
   } catch (error) {
     console.error("Error fetching unread messages:", error);
