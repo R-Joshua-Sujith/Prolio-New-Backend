@@ -3,92 +3,17 @@ const mongoose = require("mongoose");
 const Product = require("../../models/Product");
 const { sendResponse } = require("../../utils/responseHandler");
 
-// Create a new wishlist item
-// const createWishlistItem = async (req, res) => {
-//   try {
-//     const { productId } = req.params;
-//     const customerId = req.user.id;
-
-//     // Validate input
-//     if (!customerId || !productId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Customer ID and Product ID are required.",
-//       });
-//     }
-
-//     // Validate if product exists
-//     const product = await Product.findById(productId);
-//     if (!product) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Product not found.",
-//       });
-//     }
-
-//     // Find existing wishlist or create a new one
-//     let wishlist = await Wishlist.findOne({ customerId });
-
-//     if (!wishlist) {
-//       // Create a new wishlist if none exists
-//       wishlist = new Wishlist({
-//         customerId,
-//         products: [{ productId }],
-//       });
-//     } else {
-//       // Check if the product already exists in the wishlist
-//       const isProductInWishlist = wishlist.products.some(
-//         (p) => p.productId.toString() === productId
-//       );
-
-//       if (isProductInWishlist) {
-//         return res.status(409).json({
-//           success: false,
-//           message: "Product is already in the wishlist.",
-//         });
-//       }
-
-//       // Add the product to the wishlist
-//       wishlist.products.push({ productId });
-//     }
-
-//     // Save and populate the wishlist with product details
-//     await wishlist.save();
-//     await wishlist.populate("products.productId");
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Product added to wishlist successfully.",
-//       data: wishlist,
-//     });
-//   } catch (error) {
-//     console.error("Error in createWishlistItem:", error);
-
-//     // Handle specific error types
-//     if (error.name === "ValidationError") {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid data.",
-//         details: error.errors,
-//       });
-//     }
-
-//     res.status(500).json({
-//       success: false,
-//       message:
-//         "An unexpected error occurred while adding the product to the wishlist.",
-//       details: error.message,
-//     });
-//   }
-// };
-
 const createWishlistItem = async (req, res) => {
   try {
     // Get productId from both params and body
     const productId = req.params.productId;
     const customerId = req.user?.id;
 
-    console.log("Creating wishlist with:", { productId, customerId, body: req.body });
+    console.log("Creating wishlist with:", {
+      productId,
+      customerId,
+      body: req.body,
+    });
 
     if (!customerId) {
       return sendResponse(res, 401, false, "Customer ID is required");
@@ -110,30 +35,37 @@ const createWishlistItem = async (req, res) => {
     if (!wishlist) {
       wishlist = new Wishlist({
         customerId,
-        products: [{
-          productId,
-          addedAt: new Date()
-        }]
+        products: [
+          {
+            productId,
+            addedAt: new Date(),
+          },
+        ],
       });
     } else {
       // Check for duplicate
       const exists = wishlist.products.some(
-        item => item.productId.toString() === productId
+        (item) => item.productId.toString() === productId
       );
-      
+
       if (exists) {
         return sendResponse(res, 409, false, "Product already in wishlist");
       }
 
       wishlist.products.push({
         productId,
-        addedAt: new Date()
+        addedAt: new Date(),
       });
     }
 
     await wishlist.save();
 
-    return sendResponse(res, 201, true, "Product added to wishlist successfully");
+    return sendResponse(
+      res,
+      201,
+      true,
+      "Product added to wishlist successfully"
+    );
   } catch (error) {
     console.error("Wishlist creation error:", error);
     return sendResponse(res, 500, false, "Failed to add product to wishlist");
