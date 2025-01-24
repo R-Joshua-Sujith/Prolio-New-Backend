@@ -812,7 +812,6 @@ const getForumById = async (forumId) => {
 /**
  * Function to send invitations to users.
  */
-
 exports.sendInvitations = async (req, res) => {
   const { forumId } = req.params;
   const { inviteEmails } = req.body;
@@ -826,34 +825,53 @@ exports.sendInvitations = async (req, res) => {
       return sendResponse(res, 400, false, "Invalid request");
     }
 
+    // Fetch the forum
     const forum = await ForumModel.findById(forumId);
     if (!forum) {
       return sendResponse(res, 404, false, "Forum not found");
     }
 
+    // Find users by email
     const invitedUsers = await CustomerModel.find({
       email: { $in: inviteEmails },
     });
 
-    const invitedUserIds = invitedUsers.map((owner) => owner._id);
-    forum.invitedUsers.push(...invitedUserIds);
+    // Filter out already invited users
+    const alreadyInvitedUserIds = new Set(
+      forum.invitedUsers.map((id) => id.toString())
+    );
+    const newInvitedUsers = invitedUsers.filter(
+      (user) => !alreadyInvitedUserIds.has(user._id.toString())
+    );
+
+    // If no new users to invite
+    if (newInvitedUsers.length === 0) {
+      return sendResponse(
+        res,
+        400,
+        false,
+        "selected users are already invited"
+      );
+    }
+
+    // Add new users to the invitedUsers list
+    const newInvitedUserIds = newInvitedUsers.map((user) => user._id);
+    forum.invitedUsers.push(...newInvitedUserIds);
     await forum.save();
 
     // Get the company name of the user sending the invitation
     const sender = await CustomerModel.findById(senderId).populate(
       "companyDetails"
-    ); // Assuming companyDetails is populated
+    );
     const companyName =
-      sender?.companyDetails?.companyInfo?.companyName || "Individual"; // Use "Individual" if company name is not available
+      sender?.companyDetails?.companyInfo?.companyName || "Individual";
 
-    // Send notifications to invited users
-    const notificationsData = invitedUsers.map((user) => {
-      return {
-        userId: user._id,
-        message: `You have been invited by ${companyName} to join the forum ${forum.forumName}.`,
-        type: "forum-invitation",
-      };
-    });
+    // Send notifications to newly invited users
+    const notificationsData = newInvitedUsers.map((user) => ({
+      userId: user._id,
+      message: `You have been invited by ${companyName} to join the forum ${forum.forumName}.`,
+      type: "forum-invitation",
+    }));
 
     // Create notifications in batch
     await NotificationService.createBatchNotifications(
@@ -866,7 +884,7 @@ exports.sendInvitations = async (req, res) => {
       200,
       true,
       "Invitations sent successfully",
-      invitedUsers
+      newInvitedUsers
     );
   } catch (error) {
     console.error("Error sending invitations:", error);
@@ -875,6 +893,69 @@ exports.sendInvitations = async (req, res) => {
     });
   }
 };
+
+// exports.sendInvitations = async (req, res) => {
+//   const { forumId } = req.params;
+//   const { inviteEmails } = req.body;
+//   const senderId = req.user?.id;
+
+//   console.log("forumID", "--------->", forumId);
+
+//   try {
+//     // Validate the input
+//     if (!forumId || !Array.isArray(inviteEmails) || inviteEmails.length === 0) {
+//       return sendResponse(res, 400, false, "Invalid request");
+//     }
+
+//     const forum = await ForumModel.findById(forumId);
+//     if (!forum) {
+//       return sendResponse(res, 404, false, "Forum not found");
+//     }
+
+//     const invitedUsers = await CustomerModel.find({
+//       email: { $in: inviteEmails },
+//     });
+
+//     const invitedUserIds = invitedUsers.map((owner) => owner._id);
+//     forum.invitedUsers.push(...invitedUserIds);
+//     await forum.save();
+
+//     // Get the company name of the user sending the invitation
+//     const sender = await CustomerModel.findById(senderId).populate(
+//       "companyDetails"
+//     ); // Assuming companyDetails is populated
+//     const companyName =
+//       sender?.companyDetails?.companyInfo?.companyName || "Individual"; // Use "Individual" if company name is not available
+
+//     // Send notifications to invited users
+//     const notificationsData = invitedUsers.map((user) => {
+//       return {
+//         userId: user._id,
+//         message: `You have been invited by ${companyName} to join the forum ${forum.forumName}.`,
+//         type: "forum-invitation",
+//       };
+//     });
+
+//     // Create notifications in batch
+//     await NotificationService.createBatchNotifications(
+//       notificationsData,
+//       req.io
+//     );
+
+//     return sendResponse(
+//       res,
+//       200,
+//       true,
+//       "Invitations sent successfully",
+//       invitedUsers
+//     );
+//   } catch (error) {
+//     console.error("Error sending invitations:", error);
+//     return sendResponse(res, 500, false, "Error sending invitations", {
+//       error: error.message,
+//     });
+//   }
+// };
 /**
  * Controller function to check the invited users for a specific forum.
  *
@@ -886,30 +967,44 @@ exports.sendInvitations = async (req, res) => {
 exports.checkInvitedUsers = async (req, res) => {
   const { forumId } = req.params;
   try {
-    const forum = await ForumModel.findById(forumId).populate("invitedUsers");
+    // Populate both members and invitedUsers fields
+    const forum = await ForumModel.findById(forumId)
+      .populate("invitedUsers")
+      .populate("members");
+
     if (!forum) {
       return sendResponse(res, 404, false, "Forum not found");
     }
+
     const allUsers = await CustomerModel.find({});
 
-    // Map each user to an object containing their email and their invitation status
-    const invitedUsersWithStatus = allUsers.map((user) => ({
-      email: user.email,
-      invited: forum.invitedUsers.some((invitedUser) =>
-        invitedUser._id.equals(user._id)
-      ),
-    }));
+    // Map each user to an object containing their email and their statuses
+    const usersWithStatus = allUsers.map((user) => {
+      const isMember = forum.members.some((member) =>
+        member._id.equals(user._id)
+      );
+
+      return {
+        email: user.email,
+        isMember,
+        invited: isMember
+          ? null // Skip the invited status if the user is already a member
+          : forum.invitedUsers.some((invitedUser) =>
+              invitedUser._id.equals(user._id)
+            ),
+      };
+    });
 
     return sendResponse(
       res,
       200,
       true,
-      "Invited users retrieved successfully",
-      invitedUsersWithStatus
+      "User statuses retrieved successfully",
+      usersWithStatus
     );
   } catch (error) {
-    console.error("Error checking invited users:", error);
-    return sendResponse(res, 500, false, "Error checking invited users", {
+    console.error("Error checking user statuses:", error);
+    return sendResponse(res, 500, false, "Error checking user statuses", {
       error: error.message,
     });
   }
