@@ -6,6 +6,7 @@ const {
   companyVerify,
   looseVerify,
 } = require("../../controller/Company/Middleware/auth");
+const { checkAccess } = require("../../controller/Company/Middleware/companyUserAuth")
 const multer = require("multer");
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -20,12 +21,14 @@ router.post(
   "/create-product",
   upload.array("images"),
   companyVerify,
+  checkAccess("product", "create"),
   companyProductController.createProduct
 );
 
 router.put(
   "/edit-product/:id",
   companyVerify,
+  checkAccess("product", "edit"),
   companyProductController.updateProduct
 );
 
@@ -38,6 +41,7 @@ router.get(
 router.get(
   "/get-product/:productId",
   companyVerify,
+  checkAccess("product", "view"),
   companyProductController.getProductById
 );
 
@@ -53,7 +57,8 @@ router.get("/check-unique-id", companyProductController.checkProductIdUnique);
 
 router.get(
   "/get-all-products",
-  looseVerify,
+  companyVerify,
+  checkAccess("product", "view"),
   companyProductController.getAllCompanyProducts
 );
 
@@ -66,6 +71,7 @@ router.get(
 router.post(
   "/add-image/:productId",
   companyVerify,
+  checkAccess("product", "edit"),
   upload.single("image"),
   companyProductController.addProductImage
 );
@@ -73,6 +79,7 @@ router.post(
 router.delete(
   "/delete-image/:productId/:imageId",
   companyVerify,
+  checkAccess("product", "edit"),
   companyProductController.deleteProductImage
 );
 

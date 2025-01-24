@@ -29,7 +29,12 @@ const createProduct = async (req, res) => {
   try {
     const { formData } = JSON.parse(req.body.data);
 
-    let ownerId = req.user.id;
+    let ownerId;
+    if (req.userType === "Customer") {
+      ownerId = req.user?.id
+    } else {
+      ownerId = req.user.ownerId
+    }
 
     if (!ownerId) {
       return sendResponse(res, 500, true, "User ID Not Found");
@@ -93,12 +98,17 @@ const createProduct = async (req, res) => {
 };
 
 const updateProduct = async (req, res) => {
-  console.log("hi");
   try {
     const productId = req.params.id;
 
     const formData = req.body.formData;
-    const ownerId = req.user.id;
+
+    let ownerId;
+    if (req.userType === "Customer") {
+      ownerId = req.user?.id
+    } else {
+      ownerId = req.user.ownerId
+    }
 
     console.log("id", productId);
     console.log(formData);
@@ -269,8 +279,12 @@ const checkSlugUnique = async (req, res) => {
 const getAllCompanyProducts = async (req, res) => {
   try {
     const { page = 1, limit = 10, searchTerm = "" } = req.query;
-
-    const ownerId = req.user?.id;
+    let ownerId;
+    if (req.userType === "Customer") {
+      ownerId = req.user?.id
+    } else {
+      ownerId = req.user.ownerId
+    }
 
     // Convert page and limit to numbers
     const pageNum = parseInt(page);
@@ -364,7 +378,12 @@ const getAllCompanyProducts = async (req, res) => {
 const getProductById = async (req, res) => {
   try {
     const { productId } = req.params;
-    const ownerId = req.user.id;
+    let ownerId;
+    if (req.userType === "Customer") {
+      ownerId = req.user?.id
+    } else {
+      ownerId = req.user.ownerId
+    }
 
     // Find product with both productId and ownerId to ensure ownership
     const product = await ProductModel.findOne({
@@ -520,7 +539,13 @@ const getCompanyProducts = async (req, res) => {
 const addProductImage = async (req, res) => {
   try {
     const { productId } = req.params;
-    const ownerId = req.user.id;
+
+    let ownerId;
+    if (req.userType === "Customer") {
+      ownerId = req.user?.id
+    } else {
+      ownerId = req.user.ownerId
+    }
 
     // Check if product exists and belongs to user
     const product = await ProductModel.findOne({ _id: productId, ownerId });
@@ -576,7 +601,14 @@ const deleteProductImage = async (req, res) => {
   try {
     console.log("hi");
     const { productId, imageId } = req.params;
-    const ownerId = req.user.id;
+
+
+    let ownerId;
+    if (req.userType === "Customer") {
+      ownerId = req.user?.id
+    } else {
+      ownerId = req.user.ownerId
+    }
 
     // Check if product exists and belongs to user
     const product = await ProductModel.findOne({ _id: productId, ownerId });

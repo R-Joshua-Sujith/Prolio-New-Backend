@@ -3,6 +3,7 @@ const Schema = mongoose.Schema;
 
 const companySchema = new Schema({
     ownerId: { type: Schema.Types.ObjectId, ref: "Customer" },
+    username: { type: String },
     email: { type: String, unique: true },
     password: { type: String },
     phone: { type: String },
@@ -39,8 +40,15 @@ const companySchema = new Schema({
                 message: { type: Boolean, default: false },
                 invite: { type: Boolean, default: false }
             }],
+        },
+        influencerAccess: {
+            invite: { type: Boolean, default: false },
+            accept: { type: Boolean, default: false },
+            reject: { type: Boolean, default: false },
+            assignProduct: { type: Boolean, default: false }
         }
     },
+    status: { type: String, enum: ["Active", "Blocked"] }
 }, {
     timestamps: true
 })

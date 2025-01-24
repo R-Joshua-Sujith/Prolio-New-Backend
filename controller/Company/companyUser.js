@@ -27,7 +27,7 @@ const getAllDetailsOfCompany = async (req, res) => {
 const createCompanyUser = async (req, res) => {
     try {
         const ownerId = req.user.id;
-        const { email, password, phone, department, access } = req.body;
+        const { username, email, password, phone, department, access } = req.body;
         console.log(access);
         // Validate required fields
         if (!email || !password || !phone) {
@@ -50,6 +50,7 @@ const createCompanyUser = async (req, res) => {
         // Create new user
         const newUser = await CompanyUser.create({
             ownerId,
+            username,
             email,
             password: hashedPassword,
             phone,
@@ -79,7 +80,7 @@ const getAllCompanyUsers = async (req, res) => {
 
         const users = await CompanyUser.find({ ownerId })
             .select('-password')  // Exclude password
-            .populate('department', 'name'); // Populate department name
+            .populate('department', 'name').sort({ createdAt: -1 }) // Populate department name
 
         res.status(200).json({ users });
 
@@ -119,7 +120,7 @@ const updateCompanyUser = async (req, res) => {
     try {
         const ownerId = req.user.id;
         const { userId } = req.params;
-        const { email, phone, department, access } = req.body;
+        const { username, email, phone, department, access } = req.body;
 
         // Check if user exists and belongs to owner
         const user = await CompanyUser.findOne({ _id: userId, ownerId });
@@ -136,11 +137,11 @@ const updateCompanyUser = async (req, res) => {
                 });
             }
         }
-
         // Update user
         const updatedUser = await CompanyUser.findByIdAndUpdate(
             userId,
             {
+                username: username || user.username,
                 email: email || user.email,
                 phone: phone || user.phone,
                 department: department || user.department,

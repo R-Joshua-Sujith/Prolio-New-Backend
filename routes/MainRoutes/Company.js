@@ -12,6 +12,7 @@ const companyDepartmentRoutes = require("../Company/Department.js");
 const companyUserRoutes = require("../Company/companyUser.js");
 const companyUserAuthRoutes = require("../Company/companyUserAuth");
 const companyinfluencersRoutes = require("../Company/Influencer");
+const companyUserTestRoutes = require("../Company/CompanyUserTest.js");
 
 router.use("/enquiry", companyEnquiryRoutes);
 router.use("/forum", companyForumRoutes);
@@ -27,5 +28,8 @@ router.use("/companyUser", companyUserRoutes);
 router.use("/companyUserAuth", companyUserAuthRoutes);
 
 router.use("/influencers", companyinfluencersRoutes);
+
+
+router.use("/company-user-test",companyUserTestRoutes)
 
 module.exports = router;
