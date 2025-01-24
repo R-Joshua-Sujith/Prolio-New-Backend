@@ -112,3 +112,42 @@ exports.getCustomerProfile = async (req, res) => {
     );
   }
 };
+
+exports.checkCustomerStatus = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const user = await Customer.findById(
+      userId,
+      "isCompany isInfluencer status"
+    );
+
+    if (!user) {
+      return sendResponse(res, 404, false, "User not found");
+    }
+
+    const isCompanyVerified = user.isCompany?.verified || false;
+    const isCompanyApplied = user.isCompany?.applied || false;
+    const isInfluencerVerified = user.isInfluencer?.verified || false;
+    const isInfluencerApplied = user.isInfluencer?.applied || false;
+
+    console.log("isInfluencerVerified", isInfluencerVerified);
+    console.log("isInfluencerApplied", isInfluencerApplied);
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Customer status fetched successfully",
+      {
+        status: user.status,
+        isCompanyVerified,
+        isCompanyApplied,
+        isInfluencerVerified,
+        isInfluencerApplied,
+      }
+    );
+  } catch (error) {
+    console.error("Error fetching customer status:", error.message);
+    return sendResponse(res, 500, false, "Error fetching customer status");
+  }
+};

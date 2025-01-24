@@ -29,8 +29,18 @@ router.get(
 );
 
 // Route to send OTP
-router.post("/send-otp", customerAuthenticationContoller.sendOTP);
+router.post("/send-otp", customerAuthenticationContoller.resendOTP);
 router.post("/verify-otp", customerAuthenticationContoller.verifyOTP);
 router.delete("/logout", customerAuthenticationContoller.logout);
+
+router.post(
+  "/forgot-password",
+  customerAuthenticationContoller.requestPasswordReset
+);
+router.post(
+  "/verify-reset-otp",
+  customerAuthenticationContoller.verifyPasswordResetOTP
+);
+router.post("/reset-password", customerAuthenticationContoller.resetPassword);
 
 module.exports = router;

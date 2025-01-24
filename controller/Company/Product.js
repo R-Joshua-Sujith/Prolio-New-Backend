@@ -7,6 +7,7 @@ const VisitedLogModel = require("../../models/visitedLog");
 const mongoose = require("mongoose");
 const { createLogs } = require("./Log");
 const visitedLog = require("../../models/visitedLog");
+const Logs = require("../../models/Logs");
 
 /**
  *  Function to check the API is working
@@ -100,7 +101,6 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const productId = req.params.id;
-
     const formData = req.body.formData;
 
     let ownerId;
@@ -110,15 +110,13 @@ const updateProduct = async (req, res) => {
       ownerId = req.user.ownerId
     }
 
-    console.log("id", productId);
-    console.log(formData);
-
     if (!ownerId) {
       return sendResponse(res, 500, true, "User ID Not Found");
     }
 
-    // Check if product exists
+    // Retrieve existing product
     const existingProduct = await ProductModel.findById(productId);
+    console.log("Existing Product:", existingProduct);
 
     if (!existingProduct) {
       return sendResponse(res, 404, false, "Product not found");
@@ -129,7 +127,7 @@ const updateProduct = async (req, res) => {
       return sendResponse(res, 403, false, "Unauthorized to edit this product");
     }
 
-    // Check if new id/slug conflicts with other products (excluding current product)
+    // Check for duplicate id/slug
     const duplicateProduct = await ProductModel.findOne({
       _id: { $ne: productId },
       $or: [
@@ -151,6 +149,32 @@ const updateProduct = async (req, res) => {
       );
     }
 
+    // Compare prices
+    const previousPrice = existingProduct.basicDetails.price;
+    const newPrice = formData.basicDetails.price;
+
+    console.log("Previous Price:", previousPrice);
+    console.log("New Price:", newPrice);
+
+    const logData = {
+      userId: req.user.id,
+      userModel: "Customer",
+      targetId: productId,
+      targetModel: "Product",
+      action: "PRODUCT_UPDATED",
+    };
+
+    // If price has changed, add priceValue to logData
+    if (previousPrice !== newPrice) {
+      console.log("Price has changed:", { previousPrice, newPrice });
+      logData.priceValue = [
+        {
+          previousPrice,
+          newPrice,
+        },
+      ];
+    }
+
     // Update product
     const updatedProduct = await ProductModel.findByIdAndUpdate(
       productId,
@@ -168,15 +192,10 @@ const updateProduct = async (req, res) => {
       { new: true }
     );
 
-    const logData = {
-      userId: req.user.id,
-      userModel: "Customer",
-      targetId: productId,
-      targetModel: "Product",
-      action: `PRODUCT_UPDATED`,
-    };
+    // Log the data (save to database)
+    console.log("Log Data:", logData);
+    await createLogs(logData);
 
-    createLogs(logData);
     sendResponse(
       res,
       200,
@@ -187,6 +206,74 @@ const updateProduct = async (req, res) => {
   } catch (error) {
     console.error("Error updating product:", error);
     sendResponse(res, 500, false, "Error updating product", {
+      details: error.message,
+    });
+  }
+};
+
+const getPriceHistoryGraph = async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    // Match logs for product price changes (PRODUCT_UPDATED)
+    const priceHistory = await Logs.aggregate([
+      {
+        $match: {
+          targetId: new mongoose.Types.ObjectId(productId), // Match the product ID
+          action: "PRODUCT_UPDATED", // Match the price change action
+        },
+      },
+      {
+        $unwind: "$priceValue", // Unwind the price value array
+      },
+      {
+        $project: {
+          _id: 1,
+          previousPrice: "$priceValue.previousPrice",
+          newPrice: "$priceValue.newPrice",
+          timestamp: "$createdAt", // Use the timestamp when price was updated
+        },
+      },
+      {
+        $sort: { timestamp: -1 }, // Sort by timestamp descending to get the latest first
+      },
+    ]);
+
+    if (!priceHistory || priceHistory.length === 0) {
+      return sendResponse(
+        res,
+        404,
+        false,
+        "No price change history found for this product"
+      );
+    }
+
+    // Prepare data for the graph with percentage change
+    const priceGraphData = priceHistory.map((entry) => {
+      const previousPrice = entry.previousPrice;
+      const newPrice = entry.newPrice;
+      const percentageChange = previousPrice
+        ? ((newPrice - previousPrice) / previousPrice) * 100
+        : 0;
+
+      return {
+        timestamp: entry.timestamp,
+        previousPrice,
+        newPrice,
+        percentageChange: percentageChange.toFixed(2), // Rounded to 2 decimal places
+      };
+    });
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Price history fetched successfully",
+      priceGraphData
+    );
+  } catch (error) {
+    console.error("Error fetching price history:", error);
+    return sendResponse(res, 500, false, "Error fetching price history", {
       details: error.message,
     });
   }
@@ -1293,6 +1380,7 @@ module.exports = {
   getProductById,
   getCompanyProducts,
   updateProduct,
+  getPriceHistoryGraph,
   addProductImage,
   deleteProductImage,
   getTotalViewsAndNewVisits,
@@ -1302,5 +1390,5 @@ module.exports = {
   getProductNames,
   toggleVisibility,
   getProductStats,
-  assignProducts
+  assignProducts,
 };

@@ -4,14 +4,16 @@ const Schema = mongoose.Schema;
 const departmentSchema = new Schema(
   {
     name: { type: String, required: true },
-    users: [{
-      type: Schema.Types.ObjectId,
-      ref: "CompanyUser"
-    }]
+    users: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "CompanyUser",
+      },
+    ],
   },
   {
     timestamps: true,
-    _id: true
+    _id: true,
   }
 );
 
@@ -74,6 +76,15 @@ const customerSchema = new Schema(
         publicId: { type: String },
       },
       documents: [
+        {
+          url: { type: String },
+          publicId: { type: String },
+        },
+      ],
+    },
+    story: {
+      content: { type: String },
+      images: [
         {
           url: { type: String },
           publicId: { type: String },

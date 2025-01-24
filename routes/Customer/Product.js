@@ -12,6 +12,12 @@ router.get(
   customerProductController.getProduct
 );
 
+router.get(
+  "/my-single-product/:slug",
+  // customerVerify,
+  customerProductController.getMySingleProduct
+);
+
 router.get("/all-Products", customerProductController.getAllProducts);
 
 router.get("/get-search-products", customerProductController.getSearchProducts);

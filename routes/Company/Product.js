@@ -31,6 +31,11 @@ router.put(
   checkAccess("product", "edit"),
   companyProductController.updateProduct
 );
+router.get(
+  "/price-graph/:id",
+  // companyVerify,
+  companyProductController.getPriceHistoryGraph
+);
 
 router.get(
   "/comapny-products/:ownerId",

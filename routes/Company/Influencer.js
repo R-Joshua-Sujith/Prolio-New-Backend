@@ -40,5 +40,15 @@ router.get(
   InfluencerController.getCompanyInfluencersAndInvites
 );
 
+router.get(
+  "/company-products",
+  companyVerify,
+  InfluencerController.getCompanyActiveProducts
+);
 
+router.post(
+  "/remove-assigned-product",
+  companyVerify,
+  InfluencerController.removeAssignedProduct
+);
 module.exports = router;

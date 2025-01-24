@@ -20,11 +20,65 @@ exports.test = async (req, res) => {
   }
 };
 
+
 exports.getProduct = async (req, res) => {
   const { slug } = req.params;
   const { latitude, longitude } = req.query;
-
   const userId = req.user.id;
+
+  try {
+    // Find the product by slug and populate both owner and category details
+    const product = await ProductModel.findOne({
+      "basicDetails.slug": slug,
+    })
+      .populate(
+        "ownerId",
+        "companyDetails.companyInfo companyDetails.contactInfo"
+      )
+      .populate({
+        path: "category.categoryId",
+        populate: {
+          path: "subCategories",
+          select: "name", // Select only the name field
+        },
+        select: "categoryName subCategories", 
+      });
+
+    if (!product) {
+      return res.status(400).json({ error: "Product Not Found" });
+    }
+
+    // Check for an existing enquiry
+    const enquiry = await EnquiryModel.findOne({
+      productId: product._id,
+      customerId: req.user?.id,
+    });
+
+    // Transform the response to include category and subcategory names
+    const responseData = {
+      product: {
+        ...product.toObject(),
+        category: {
+          ...product.category,
+          categoryName: product.category.categoryId?.categoryName || null,
+          subCategoryName:
+            product.category.categoryId?.subCategories?.[0]?.name || null,
+        },
+      },
+      enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
+    };
+
+    saveVisitedLogs(latitude, longitude, userId, product._id);
+    res.status(200).json(responseData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+exports.getMySingleProduct = async (req, res) => {
+  const { slug } = req.params;
+
+  // const userId = req.user.id;
   try {
     // Find the product by slug
     const product = await ProductModel.findOne({
@@ -38,19 +92,12 @@ exports.getProduct = async (req, res) => {
       return res.status(400).json({ error: "Product Not Found" });
     }
 
-    // Check for an existing enquiry for this product by the logged-in user (req.user)
-    const enquiry = await EnquiryModel.findOne({
-      productId: product._id,
-      customerId: req.user?.id,
-    });
-
     // Prepare response data
     const responseData = {
       product,
-      enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
+      // enquiryStatus: enquiry ? enquiry.status : "No Enquiry Found",
     };
 
-    saveVisitedLogs(latitude, longitude, userId, product._id);
     res.status(200).json(responseData);
   } catch (error) {
     console.error(error);
@@ -84,6 +131,18 @@ exports.getAllProducts = async (req, res) => {
         { "basicDetails.name": { $regex: searchTerm, $options: "i" } },
         { "basicDetails.description": { $regex: searchTerm, $options: "i" } },
       ];
+
+      // Add numeric price search for partial matches
+      if (!isNaN(searchTerm)) {
+        query.$or.push({
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$basicDetails.price" }, // Convert price to string
+              regex: `^${searchTerm}`, // Match starting digits
+            },
+          },
+        });
+      }
     }
     if (category) query["category.categoryId"] = category;
     if (subcategory) query["category.subCategoryId"] = subcategory;
