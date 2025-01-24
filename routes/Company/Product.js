@@ -28,6 +28,11 @@ router.put(
   companyVerify,
   companyProductController.updateProduct
 );
+router.get(
+  "/price-graph/:id",
+  // companyVerify,
+  companyProductController.getPriceHistoryGraph
+);
 
 router.get(
   "/comapny-products/:ownerId",
