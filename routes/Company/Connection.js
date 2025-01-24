@@ -1,39 +1,36 @@
 const express = require("express");
 const router = express.Router();
 const ConnectionController = require("../../controller/Company/Connection");
-
-const {
-  companyVerify,
-  looseVerify,
-} = require("../../controller/Company/Middleware/auth");
+const { companyVerify } = require("../../controller/Company/Middleware/auth");
+const { customerVerify } = require("../../controller/Customer/Middleware/auth");
 
 router.post(
   "/create-connection",
-  companyVerify,
+  customerVerify,
   ConnectionController.createConnection
 );
 
 router.get(
   "/get-forum-connections/:forumId",
-  companyVerify,
+  customerVerify,
   ConnectionController.getForumConnections
 );
 
 router.get(
   "/getOwnerConnections",
-  companyVerify,
+  customerVerify,
   ConnectionController.getOwnerConnections
 );
 
 router.delete(
   "/remove-connection/:connectionId",
-  companyVerify,
+  customerVerify,
   ConnectionController.deleteConnection
 );
 
 router.get(
   "/check-status/:userId",
-  companyVerify,
+  customerVerify,
   ConnectionController.checkConnectionStatus
 );
 module.exports = router;

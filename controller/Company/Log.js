@@ -4,17 +4,20 @@ const mongoose = require("mongoose");
 
 const createLogs = async (logData) => {
   try {
+    // Make sure priceValue is included in logData
     const logEntry = new Logs({
       userId: logData.userId,
       userModel: logData.userModel,
       targetId: logData.targetId,
       targetModel: logData.targetModel,
       action: logData.action,
+      priceValue: logData.priceValue, // Add priceValue to log
     });
+
     await logEntry.save();
-    console.log("log created Successfully");
+    console.log("log created successfully");
   } catch (error) {
-    console.log("error creating Log", error);
+    console.log("Error creating Log:", error);
   }
 };
 

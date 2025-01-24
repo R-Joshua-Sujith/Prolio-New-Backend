@@ -133,13 +133,19 @@ exports.checkCustomerStatus = async (req, res) => {
     console.log("isInfluencerVerified", isInfluencerVerified);
     console.log("isInfluencerApplied", isInfluencerApplied);
 
-    return sendResponse(res, 200, true, "Customer status fetched successfully", {
-      status: user.status,
-      isCompanyVerified,
-      isCompanyApplied,
-      isInfluencerVerified,
-      isInfluencerApplied
-    });
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Customer status fetched successfully",
+      {
+        status: user.status,
+        isCompanyVerified,
+        isCompanyApplied,
+        isInfluencerVerified,
+        isInfluencerApplied,
+      }
+    );
   } catch (error) {
     console.error("Error fetching customer status:", error.message);
     return sendResponse(res, 500, false, "Error fetching customer status");
