@@ -1,5 +1,6 @@
 const CustomerModel = require("../../models/Customer");
 const ForumModel = require("../../models/Forum");
+const NotificationService = require("../../utils/notificationService");
 const { sendResponse } = require("../../utils/responseHandler");
 
 (exports.getAllCompanyForums = async (req, res) => {
@@ -40,7 +41,21 @@ const { sendResponse } = require("../../utils/responseHandler");
       forum.isBlocked = !forum.isBlocked;
       await forum.save();
 
-      const message = forum.isBlocked
+      const action = forum.isBlocked ? "blocked" : "unblocked";
+      const message = `Your forum ${forum.forumName} has been ${action} by the Prolio admin.`;
+      const notificationType = forum.isBlocked
+        ? "FORUM_BLOCKED"
+        : "FORUM_UNBLOCKED";
+
+      // Send notification to the forum owner
+      await NotificationService.createNotification({
+        userId: forum.ownerId, // Owner of the forum
+        message,
+        type: notificationType,
+        io: req.app.get("socketIo"), // Assuming you have socket.io set up
+      });
+
+      const responseMessage = forum.isBlocked
         ? "Forum has been blocked successfully"
         : "Forum has been unblocked successfully";
 
@@ -49,7 +64,7 @@ const { sendResponse } = require("../../utils/responseHandler");
         200,
         true,
         { isBlocked: forum.isBlocked },
-        message
+        responseMessage
       );
     } catch (error) {
       console.error("Error in toggling forum block/unblock:", error);
