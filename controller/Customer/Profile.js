@@ -83,6 +83,54 @@ exports.updateCustomerProfile = async (req, res) => {
   }
 };
 
+/**
+ * API to delete profile image
+ */
+exports.deleteProfileImage = async (req, res) => {
+  const customerId = req.user?.id; // Assuming user ID is passed in request
+
+  try {
+    // Find the customer by ID
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found.",
+      });
+    }
+
+    // Check if the customer has a profile image
+    if (customer.profile?.url) {
+      // Delete the image from S3
+      await deleteFromS3(customer.profile.url); // Pass the URL directly to deleteFromS3
+
+      // Remove the profile image URL from the customer profile
+      customer.profile = null;
+
+      // Save the updated customer profile
+      const updatedCustomer = await customer.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Profile image deleted successfully.",
+        data: updatedCustomer, // Optionally return the updated customer
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "No profile image found to delete.",
+      });
+    }
+  } catch (error) {
+    console.error("Error deleting profile image:", error);
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected error occurred while deleting the profile image.",
+      error: error.message,
+    });
+  }
+};
+
 exports.getCustomerProfile = async (req, res) => {
   try {
     const userId = req.user?.id;

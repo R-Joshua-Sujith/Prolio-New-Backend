@@ -9,6 +9,7 @@ router.get("/verified", adminCompanyController.getVerifiedCompanyUsers);
 router.get("/un-verified", adminCompanyController.getPendingCompanyUsers);
 
 router.get("/rejected", adminCompanyController.getRejectedCompanyUsers);
+router.get("/reApplied", adminCompanyController.getReAppliedCompanyUsers);
 
 router.put(
   "/change-status/:companyId",

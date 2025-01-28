@@ -73,6 +73,41 @@ exports.getRejectedCompanyUsers = async (req, res) => {
     });
   }
 };
+exports.getReAppliedCompanyUsers = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const totalRejectedCompanies = await CustomerModel.countDocuments({
+      "isCompany.reApplied": true,
+    });
+
+    const rejectedCompanies = await CustomerModel.find({
+      "isCompany.reApplied": true,
+    })
+      .select("-password -refreshToken -otp -otpExpiry")
+      .limit(limit)
+      .skip(skip);
+
+    res.status(200).json({
+      success: true,
+      count: rejectedCompanies.length,
+      total: totalRejectedCompanies,
+      totalPages: Math.ceil(totalRejectedCompanies / limit),
+      currentPage: page,
+      data: rejectedCompanies,
+      hasNextPage: page * limit < totalRejectedCompanies,
+      hasPrevPage: page > 1,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching rejected companies",
+      error: error.message,
+    });
+  }
+};
 
 exports.getPendingCompanyUsers = async (req, res) => {
   try {
@@ -126,7 +161,7 @@ exports.getPendingCompanyUsers = async (req, res) => {
       });
     }
 
-    if (!["verified", "rejected"].includes(status)) {
+    if (!["verified", "rejected", "reApplied"].includes(status)) {
       return res.status(400).json({
         success: false,
         message: "Invalid status. Status must be 'verified' or 'rejected'",
@@ -136,6 +171,7 @@ exports.getPendingCompanyUsers = async (req, res) => {
     const updateFields = {
       "isCompany.verified": status === "verified",
       "isCompany.rejected": status === "rejected",
+      "isCompany.reApplied": status === "reApplied",
     };
 
     const company = await CustomerModel.findByIdAndUpdate(

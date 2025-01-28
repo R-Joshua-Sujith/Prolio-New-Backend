@@ -20,6 +20,11 @@ router.patch(
   customerVerify,
   profileContoller.updateCustomerProfile
 );
+router.delete(
+  "/delete-profile-image",
+  customerVerify,
+  profileContoller.deleteProfileImage
+);
 
 router.get(
   "/customer-profile",
