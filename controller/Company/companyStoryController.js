@@ -78,12 +78,12 @@ const createCompanyStory = async (req, res) => {
 };
 
 // Update existing company story
+// Update company story with proper file handling
 const updateCompanyStory = async (req, res) => {
   try {
     const { content, existingImages } = req.body;
     const files = req.files;
 
-    // Parse existingImages back to array if it's a string
     const existingImagesArray = existingImages
       ? JSON.parse(existingImages)
       : [];
@@ -96,28 +96,31 @@ const updateCompanyStory = async (req, res) => {
       });
     }
 
-    // Update content if provided
     if (content) {
       company.story.content = content;
     }
 
-    // Replace existing images with the ones that weren't removed
     company.story.images = existingImagesArray;
 
-    // Add new images if any
     if (files && files.length > 0) {
-      const uploadPromises = files.map((file) =>
-        uploadToS3({
-          file: file,
-          folder: "company_stories",
-          companyId: company._id,
-        })
-      );
+      const uploadPromises = files.map(async (file) => {
+        const fileExtension = file.originalname.split(".").pop();
+        const uniqueFilename = `${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(7)}.${fileExtension}`;
+
+        return uploadToS3(
+          file.buffer,
+          uniqueFilename,
+          file.mimetype,
+          "company_stories"
+        );
+      });
 
       const uploadResults = await Promise.all(uploadPromises);
       const newImages = uploadResults.map((result) => ({
-        url: result.Location,
-        publicId: result.Key,
+        url: result.url,
+        publicId: result.filename,
       }));
 
       company.story.images.push(...newImages);
@@ -199,15 +202,16 @@ const deleteStoryImage = async (req, res) => {
 // Get company story
 const getCompanyStory = async (req, res) => {
   try {
-    // Validate user authentication
-    if (!req.user?.id) {
-      return res.status(401).json({
+    const { ownerId } = req.params;
+
+    if (!ownerId) {
+      return res.status(400).json({
         success: false,
-        message: "Authentication required",
+        message: "Owner ID is required",
       });
     }
 
-    const company = await Customer.findById(req.user.id).select("story");
+    const company = await Customer.findById(ownerId).select("story");
 
     if (!company || !company.story) {
       return res.status(404).json({

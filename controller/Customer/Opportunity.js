@@ -35,11 +35,7 @@ const submitOpportunity = async (req, res) => {
     if (!name) errors.push({ field: "name", message: "Name is required." });
     if (!address)
       errors.push({ field: "address", message: "Address is required." });
-    if (!yearsOfExp)
-      errors.push({
-        field: "yearsOfExp",
-        message: "Years of experience is required.",
-      });
+   
     if (errors.length > 0) {
       return res.status(400).json({
         success: false,

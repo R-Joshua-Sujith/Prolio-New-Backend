@@ -213,14 +213,19 @@ const getLogsByUserId = async (req, res) => {
 const getLogsByCustomerId = async (req, res) => {
   try {
     const customerId = req.params.customerId;
-    const { search, startDate, endDate, page = 1, pageSize = 10 } = req.query;
+    const {
+      search,
+      startDate,
+      endDate,
+      page = 1,
+      pageSize = 10,
+      sortField = "createdAt",
+      sortOrder = -1,
+    } = req.query;
 
-    console.log("Fetching logs for customerId:", customerId);
-
-    // Construct match criteria
     const buildMatchCriteria = () => {
       const criteria = {
-        userId: new mongoose.Types.ObjectId(customerId), // Directly match userId
+        userId: new mongoose.Types.ObjectId(customerId),
       };
 
       if (search) {
@@ -229,22 +234,25 @@ const getLogsByCustomerId = async (req, res) => {
       }
 
       if (startDate || endDate) {
-        criteria.createdAt = {
-          ...(startDate && { $gte: new Date(startDate) }),
-          ...(endDate && { $lte: new Date(endDate) }),
-        };
+        criteria.createdAt = {};
+        if (startDate) criteria.createdAt.$gte = new Date(startDate);
+        if (endDate) criteria.createdAt.$lte = new Date(endDate);
       }
 
       return criteria;
     };
 
-    // Pagination setup
+    const allowedSortFields = ["createdAt", "action", "targetModel"];
+    const validSortField = allowedSortFields.includes(sortField)
+      ? sortField
+      : "createdAt";
+    const validSortOrder = sortOrder === "1" ? 1 : -1;
+
     const pagination = {
-      skip: (page - 1) * pageSize,
-      limit: parseInt(pageSize, 10),
+      skip: (parseInt(page) - 1) * parseInt(pageSize),
+      limit: parseInt(pageSize),
     };
 
-    // Aggregation pipeline
     const aggregationPipeline = [
       { $match: buildMatchCriteria() },
       {
@@ -274,45 +282,56 @@ const getLogsByCustomerId = async (req, res) => {
         $project: {
           _id: 1,
           action: 1,
-          timestamp: 1,
           targetModel: 1,
           customerName: "$userDetails.name",
           customerEmail: "$userDetails.email",
           createdAt: 1,
         },
       },
-      { $sort: { timestamp: -1 } },
+      { $sort: { [validSortField]: validSortOrder } },
       { $skip: pagination.skip },
       { $limit: pagination.limit },
     ];
 
-    // Parallel execution of logs and total count
     const [logs, totalLogs] = await Promise.all([
       Logs.aggregate(aggregationPipeline),
       Logs.countDocuments(buildMatchCriteria()),
     ]);
 
-    // Check if logs exist
-    if (!logs.length) {
-      return sendResponse(res, 404, false, "No logs found for this customer");
+    const formattedLogs = logs.map((log) => ({
+      ...log,
+      createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : null,
+    }));
+
+    if (!formattedLogs.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No logs found for this customer",
+      });
     }
 
-    // Prepare response with pagination metadata
-    return sendResponse(res, 200, true, "Logs fetched successfully", {
-      logs,
-      totalLogs,
-      page: parseInt(page),
-      pageSize: pagination.limit,
-      totalPages: Math.ceil(totalLogs / pagination.limit),
+    return res.status(200).json({
+      success: true,
+      message: "Logs fetched successfully",
+      data: {
+        logs: formattedLogs,
+        totalLogs,
+        page: parseInt(page),
+        pageSize: pagination.limit,
+        totalPages: Math.ceil(totalLogs / pagination.limit),
+        sortField: validSortField,
+        sortOrder: validSortOrder,
+      },
     });
   } catch (error) {
     console.error("Error fetching logs:", error);
-    return sendResponse(res, 500, false, "Error fetching logs", {
-      details: error.message,
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching logs",
+      error: error.message,
     });
   }
 };
-
 module.exports = {
   createLogs,
   getLogs,
