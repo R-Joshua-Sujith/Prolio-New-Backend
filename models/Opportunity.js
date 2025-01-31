@@ -43,7 +43,7 @@ const opportunitySchema = new Schema(
     },
     yearsOfExp: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
     },
     email: {
@@ -54,7 +54,7 @@ const opportunitySchema = new Schema(
     },
     productsDealtWith: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
     },
     memo: {

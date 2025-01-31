@@ -3,7 +3,8 @@ const Customer = require("../../models/Customer");
 const { uploadToS3 } = require("../../utils/s3FileUploader");
 const { sendResponse } = require("../../utils/responseHandler");
 const ProductModel = require("../../models/Product");
-
+const Admin = require("../../models/Admin");
+const NotificationService = require("../../utils/notificationService");
 const companyController = {
   /**
    * Register company API
@@ -22,18 +23,42 @@ const companyController = {
     try {
       // Check if the customer exists
       const existingCustomer = await Customer.findById(userId);
+
       if (!existingCustomer) {
         return sendResponse(res, 404, false, "Customer not found");
       }
-
       // Check if the customer has already applied for company registration
       if (existingCustomer.isCompany.applied) {
-        return sendResponse(
-          res,
-          400,
-          false,
-          "You have already applied for company registration"
-        );
+        if (existingCustomer.isCompany.rejected) {
+          if (!existingCustomer.isCompany.reApplied) {
+            console.log("Re-applying for company registration");
+            await Customer.findByIdAndUpdate(
+              userId,
+              {
+                "isCompany.reApplied": true,
+                "isCompany.rejected": false,
+                "isCompany.applied": false,
+              },
+              { new: true }
+            );
+          } else {
+            console.log("User has already re-applied for company registration");
+            return sendResponse(
+              res,
+              400,
+              false,
+              "You have already re-applied for company registration."
+            );
+          }
+        } else {
+          console.log("User has already applied for company registration");
+          return sendResponse(
+            res,
+            400,
+            false,
+            "You have already applied for company registration"
+          );
+        }
       }
 
       // Parse formData and contactData
@@ -42,7 +67,9 @@ const companyController = {
 
       // Handle document uploads
       if (documents.length > 0) {
+        console.log(`Uploading ${documents.length} document(s)`);
         for (const doc of documents) {
+          console.log("Uploading document:", doc.originalname);
           const uploadedDoc = await uploadToS3(
             doc.buffer,
             doc.originalname,
@@ -53,12 +80,14 @@ const companyController = {
             url: uploadedDoc.url,
             publicId: uploadedDoc.filename,
           });
+          console.log("Uploaded document URL:", uploadedDoc.url);
         }
       }
 
       // Handle company logo upload
       let savedCompanyLogo = null;
       if (companyLogo) {
+        console.log("Uploading company logo:", companyLogo.originalname);
         const uploadedLogo = await uploadToS3(
           companyLogo.buffer,
           companyLogo.originalname,
@@ -69,6 +98,7 @@ const companyController = {
           url: uploadedLogo.url,
           publicId: uploadedLogo.filename,
         };
+        console.log("Uploaded company logo URL:", uploadedLogo.url);
       }
 
       // Prepare the company data
@@ -93,14 +123,47 @@ const companyController = {
         companyLogo: savedCompanyLogo,
         documents: saveFiles,
       };
+      console.log("Final Company Data:", companyData);
 
-      // Update the customer with company details
+      // Update the customer with company details and mark as applied
       const updatedCustomer = await Customer.findByIdAndUpdate(
         userId,
-        { "isCompany.applied": true, companyDetails: companyData },
+        {
+          "isCompany.applied": true,
+          companyDetails: companyData,
+        },
         { new: true }
       );
+      console.log("Updated Customer:", updatedCustomer);
 
+      // Notify admins
+      try {
+        const admins = await Admin.find({});
+        if (admins.length > 0) {
+          const notificationMessage = `A new company has been registered by ${parsedFormData.ownerName}.`;
+          const notificationPromises = admins.map((admin) =>
+            NotificationService.createNotification({
+              userId: admin._id,
+              message: notificationMessage,
+              type: "company_registration",
+            })
+          );
+          await Promise.all(notificationPromises);
+          // Send real-time notifications if Socket.io is available
+          if (req.app.get("io")) {
+            admins.forEach((admin) => {
+              req.app.get("io").emit("newNotification", {
+                userId: admin._id,
+                message: notificationMessage,
+              });
+            });
+          }
+        }
+      } catch (notificationError) {
+        console.error("Error sending notifications:", notificationError);
+        // Continue with the registration process even if notifications fail
+      }
+      console.log("Company registration successful");
       return sendResponse(res, 200, true, "Company registered successfully", {
         companyDetails: updatedCustomer.companyDetails,
       });
@@ -116,7 +179,109 @@ const companyController = {
     }
   },
 
+  // registerCompany: async (req, res) => {
+  //   const { formData, contactData } = req.body;
+  //   const userId = req.user?.id;
+  //   const documents = req.files?.documents || [];
+  //   const companyLogo = req.files?.companyLogo?.[0];
 
+  //   const saveFiles = [];
+  //   try {
+  //     // Check if the customer exists
+  //     const existingCustomer = await Customer.findById(userId);
+  //     if (!existingCustomer) {
+  //       return sendResponse(res, 404, false, "Customer not found");
+  //     }
+
+  //     // Check if the customer has already applied for company registration
+  //     if (existingCustomer.isCompany.applied) {
+  //       return sendResponse(
+  //         res,
+  //         400,
+  //         false,
+  //         "You have already applied for company registration"
+  //       );
+  //     }
+
+  //     // Parse formData and contactData
+  //     const parsedFormData = JSON.parse(formData);
+  //     const parsedContactData = JSON.parse(contactData);
+
+  //     // Handle document uploads
+  //     if (documents.length > 0) {
+  //       for (const doc of documents) {
+  //         const uploadedDoc = await uploadToS3(
+  //           doc.buffer,
+  //           doc.originalname,
+  //           doc.mimetype,
+  //           "company/documents"
+  //         );
+  //         saveFiles.push({
+  //           url: uploadedDoc.url,
+  //           publicId: uploadedDoc.filename,
+  //         });
+  //       }
+  //     }
+
+  //     // Handle company logo upload
+  //     let savedCompanyLogo = null;
+  //     if (companyLogo) {
+  //       const uploadedLogo = await uploadToS3(
+  //         companyLogo.buffer,
+  //         companyLogo.originalname,
+  //         companyLogo.mimetype,
+  //         "company/logos"
+  //       );
+  //       savedCompanyLogo = {
+  //         url: uploadedLogo.url,
+  //         publicId: uploadedLogo.filename,
+  //       };
+  //     }
+
+  //     // Prepare the company data
+  //     const companyData = {
+  //       companyInfo: {
+  //         companyName: parsedFormData.companyName,
+  //         ownerName: parsedFormData.ownerName,
+  //         yearEstablishment: parsedFormData.yearEstablishment,
+  //         gstNo: parsedFormData.gstNo,
+  //         businessType: parsedFormData.businessType,
+  //         totalEmployees: parsedFormData.totalEmployees,
+  //         companyAbout: parsedFormData.companyAbout,
+  //       },
+  //       contactInfo: {
+  //         address: parsedContactData.address,
+  //         city: parsedContactData.city,
+  //         state: parsedContactData.state,
+  //         pincode: parsedContactData.pincode,
+  //         email: parsedContactData.email,
+  //         phone: parsedContactData.phone,
+  //       },
+  //       companyLogo: savedCompanyLogo,
+  //       documents: saveFiles,
+  //     };
+
+  //     // Update the customer with company details
+  //     const updatedCustomer = await Customer.findByIdAndUpdate(
+  //       userId,
+  //       { "isCompany.applied": true, companyDetails: companyData },
+  //       { new: true }
+  //     );
+
+  //     return sendResponse(res, 200, true, "Company registered successfully", {
+  //       companyDetails: updatedCustomer.companyDetails,
+  //     });
+  //   } catch (error) {
+  //     console.error("Error during company registration:", error);
+  //     return sendResponse(
+  //       res,
+  //       500,
+  //       false,
+  //       "Failed to register company",
+  //       error.message
+  //     );
+  //   }
+  // },
 
   getCompanyDetails: async (req, res) => {
     try {

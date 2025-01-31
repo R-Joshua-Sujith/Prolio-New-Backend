@@ -34,14 +34,15 @@ router.post(
   companyVerify,
   createCompanyStory
 );
+
 router.put(
-  "/update-story",
+  "/update-story/:ownerId",
   upload.array("images", 5),
   companyVerify,
   updateCompanyStory
 );
 
-router.get("/get-story", customerVerify, getCompanyStory);
+router.get("/get-story/:ownerId", customerVerify, getCompanyStory);
 
 router.delete("/delete-image/:imageId", companyVerify, deleteStoryImage);
 

@@ -108,6 +108,7 @@ exports.getCompanyPromotionRequests = async (req, res) => {
       pageSize = 10,
       search = "",
       status = "pending",
+      countOnly = false, // Add this parameter
     } = req.query;
 
     const pageNum = parseInt(page);
@@ -124,9 +125,8 @@ exports.getCompanyPromotionRequests = async (req, res) => {
 
     const productIds = products.map((product) => product._id);
 
+    // Base pipeline for all queries
     const baseMatchStage = { _id: { $in: productIds } };
-    const statusMatchStage = { "productRequests.status": status };
-
     const searchMatchStage = search
       ? {
           $or: [
@@ -137,7 +137,51 @@ exports.getCompanyPromotionRequests = async (req, res) => {
         }
       : {};
 
-    const aggregationPipeline = [
+    // Pipeline for total counts (across all statuses)
+    const totalCountsPipeline = [
+      { $match: baseMatchStage },
+      { $unwind: "$productRequests" },
+      {
+        $lookup: {
+          from: "customers",
+          localField: "productRequests.influencerId",
+          foreignField: "_id",
+          as: "influencerDetails",
+        },
+      },
+      { $unwind: "$influencerDetails" },
+      { $match: searchMatchStage },
+      {
+        $group: {
+          _id: "$productRequests.status",
+          count: { $sum: 1 },
+        },
+      },
+    ];
+
+    // Get total counts for all statuses
+    const totalCountsResult = await ProductModel.aggregate(totalCountsPipeline);
+    const totalStatusCounts = {
+      pending: 0,
+      accepted: 0,
+      rejected: 0,
+    };
+
+    totalCountsResult.forEach((result) => {
+      if (totalStatusCounts.hasOwnProperty(result._id)) {
+        totalStatusCounts[result._id] = result.count;
+      }
+    });
+
+    // If only counts are requested, return early
+    if (countOnly === "true") {
+      return sendResponse(res, 200, "Status counts retrieved successfully.", {
+        statusCounts: totalStatusCounts,
+      });
+    }
+
+    // Pipeline for filtered results
+    const filteredPipeline = [
       { $match: baseMatchStage },
       { $unwind: "$productRequests" },
       {
@@ -151,7 +195,7 @@ exports.getCompanyPromotionRequests = async (req, res) => {
       { $unwind: "$influencerDetails" },
       {
         $match: {
-          $and: [statusMatchStage, searchMatchStage],
+          $and: [{ "productRequests.status": status }, searchMatchStage],
         },
       },
       {
@@ -166,25 +210,23 @@ exports.getCompanyPromotionRequests = async (req, res) => {
     ];
 
     const totalItems = await ProductModel.aggregate([
-      ...aggregationPipeline,
+      ...filteredPipeline,
       { $count: "total" },
     ]);
 
     const requests = await ProductModel.aggregate([
-      ...aggregationPipeline,
+      ...filteredPipeline,
       { $skip: skip },
       { $limit: limit },
     ]);
 
-    const statusCounts = {
+    // Get filtered counts
+    const filteredStatusCounts = {
       pending: 0,
       accepted: 0,
       rejected: 0,
     };
-
-    requests.forEach((request) => {
-      statusCounts[request.status]++;
-    });
+    filteredStatusCounts[status] = requests.length;
 
     return sendResponse(
       res,
@@ -198,7 +240,8 @@ exports.getCompanyPromotionRequests = async (req, res) => {
           totalItems: totalItems[0]?.total || 0,
           pageSize: limit,
         },
-        statusCounts,
+        statusCounts: filteredStatusCounts, // Counts for current filter
+        totalStatusCounts: totalStatusCounts, // Total counts across all statuses
       }
     );
   } catch (error) {
