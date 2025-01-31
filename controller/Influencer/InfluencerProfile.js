@@ -377,23 +377,31 @@ exports.sendPromotionRequest = async (req, res) => {
     if (!influencer) {
       return res.status(404).json({ message: "Influencer not found." });
     }
-    const existingRequest = product.productRequests.some(
-      (request) =>
-        request.influencerId.toString() === influencerId &&
-        request.status === "pending"
+
+    // Step 3: Check if a request already exists
+    const existingRequest = product.productRequests.find(
+      (request) => request.influencerId.toString() === influencerId
     );
 
     if (existingRequest) {
-      return res
-        .status(400)
-        .json({ message: "Request already sent for this product." });
+      if (existingRequest.status === "pending") {
+        return res
+          .status(400)
+          .json({ message: "Request already sent for this product." });
+      } else if (existingRequest.status === "rejected") {
+        // Update the rejected request instead of creating a new one
+        existingRequest.status = "pending";
+        existingRequest.requestedDate = Date.now();
+        existingRequest.rejectedReason = null;
+      }
+    } else {
+      // If no previous request exists, create a new one
+      product.productRequests.push({
+        influencerId: influencerId,
+        status: "pending",
+        requestedDate: Date.now(),
+      });
     }
-
-    product.productRequests.push({
-      influencerId: influencerId,
-      status: "pending",
-      requestedDate: Date.now(),
-    });
 
     await product.save();
 
@@ -420,37 +428,77 @@ exports.getPromotionStatus = async (req, res) => {
     const influencerId = req.user?.id;
     const { productId } = req.params;
 
-    // Check if influencerId is available
     if (!influencerId) {
       return res.status(400).json({ message: "Influencer not authenticated." });
     }
 
-    // Step 1: Find the product by ID
+    // Find the product by ID
     const product = await ProductModel.findById(productId);
     if (!product) {
       return res.status(404).json({ message: "Product not found." });
     }
 
-    // Step 2: Check if the influencer has a request for this product
+    // Check if the influencer has a promotion request for this product
     const promotionRequest = product.productRequests.find(
-      (request) => request.influencerId.toString() === influencerId
+      (request) => request.influencerId.toString() === influencerId.toString()
     );
 
-    // If no promotion request found for this influencer and product
-    if (!promotionRequest) {
-      return res.status(404).json({
-        message: "Promotion request not found for this product and influencer.",
-      });
+    // Get the ownerId directly
+    const ownerId = product.ownerId;
+    if (!ownerId) {
+      return res.status(400).json({ message: "Invalid owner ID." });
     }
 
-    // Step 3: Return the promotion request status
-    return res.status(200).json({
-      message: "Promotion request status retrieved successfully.",
-      status: promotionRequest.status,
+    // Find the company (customer) based on the product's ownerId
+    const company = await CustomerModel.findById(ownerId);
+    if (!company) {
+      return res
+        .status(404)
+        .json({ message: "Company not found for this product." });
+    }
+
+    // Check if the influencer is assigned to the company
+    const companyInfluencerStatus = company.companyInfluencers.find(
+      (infl) => infl.influencerId.toString() === influencerId.toString()
+    );
+
+    // Initialize the response object
+    const response = {
+      message: "Status retrieved successfully",
+      productPromotion: {
+        status: promotionRequest ? promotionRequest.status : "not_requested",
+        exists: !!promotionRequest,
+      },
+      companyInfluencer: {
+        isAssigned: !!companyInfluencerStatus,
+        status: companyInfluencerStatus ? companyInfluencerStatus.status : null,
+        assignedDate: companyInfluencerStatus
+          ? companyInfluencerStatus.assignedDate
+          : null,
+      },
+    };
+
+    // If the influencer is already assigned with status "accepted", don't check for other product promotions
+    if (
+      companyInfluencerStatus &&
+      companyInfluencerStatus.status === "accepted"
+    ) {
+      return res.status(200).json(response); // Skip the "other product" check
+    }
+
+    // Check if the influencer has sent a request for any other product owned by the same owner
+    const otherProductExists = await ProductModel.exists({
+      ownerId: ownerId,
+      "productRequests.influencerId": influencerId,
     });
+
+    // Add the otherProductPromotionExists field only if influencer is not assigned with "accepted" status
+    response.otherProductPromotionExists = !!otherProductExists;
+
+    return res.status(200).json(response);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error occurred." });
+    console.error("Error in getPromotionStatus:", error);
+    return res.status(500).json({ message: "Server error occurred." });
   }
 };
 

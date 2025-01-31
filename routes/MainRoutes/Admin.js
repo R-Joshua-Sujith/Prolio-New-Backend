@@ -9,6 +9,7 @@ const adminAnalyticsRoutes = require("../Admin/Analytics");
 const adminProductsRoutes = require("../Admin/Product");
 const adminInfluencersRoutes = require("../Admin/InfluencerRoute");
 const adminLogsRoutes = require("../Admin/LogRoute");
+const adminNotificationRoutes = require("../Admin/Notification");
 
 router.use("/auth", adminAuthRoutes);
 router.use("/banner", adminBannerRoutes);
@@ -20,5 +21,6 @@ router.use("/analytics", adminAnalyticsRoutes);
 router.use("/products", adminProductsRoutes);
 router.use("/influencers", adminInfluencersRoutes);
 router.use("/logs", adminLogsRoutes);
+router.use("/notification", adminNotificationRoutes);
 
 module.exports = router;
