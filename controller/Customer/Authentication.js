@@ -9,6 +9,7 @@ const jwt = require("jsonwebtoken");
 const { sendResponse } = require("../../utils/responseHandler");
 const { uploadToS3 } = require("../../utils/s3FileUploader");
 const dotenv = require("dotenv");
+const Otp = require("../../models/Otp");
 dotenv.config();
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = process.env.BREVO_API_URL;
@@ -57,7 +58,12 @@ exports.register = async (req, res) => {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
+    // Store OTP in DB (it will be deleted automatically after 10 minutes)
+    await Otp.findOneAndUpdate(
+      { email },
+      { email, otp, createdAt: new Date() },
+      { upsert: true, new: true }
+    );
     // Store registration data temporarily
     registrationAttempts.set(email, {
       name,
